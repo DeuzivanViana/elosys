@@ -1,0 +1,20 @@
+# banco de dados — distribuído como release, não versionado (ver ADs/banco.md)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# downloads temporários do TSE / outras fontes (não guardamos o payload — ver ADs/confiabilidade.md §2)
+/dados_tmp/
+*.zip
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/

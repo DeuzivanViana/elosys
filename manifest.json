@@ -1,0 +1,156 @@
+{
+  "generated_at": "2026-09-04T03:30:09Z",
+  "collector_commit": null,
+  "sources": [
+    {
+      "source": "TSE - consulta_cand",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_2018.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T02:40:06Z",
+      "payload_sha256": "57f6881f1aa036142886ae548afd275e7ee6695643a2ab62826f2ee232d3fd44",
+      "size_bytes": 4722704,
+      "files": [
+        {
+          "filename": "consulta_cand_2018_BRASIL.csv",
+          "sha256": "5824f5d362eb7f05238a21ea02eee14e1a95b491658b4e5aaa1bf8fb6271f95e",
+          "size_bytes": 15929977
+        }
+      ]
+    },
+    {
+      "source": "TSE - consulta_cand",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_2020.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T02:41:38Z",
+      "payload_sha256": "8079b01adfa406ebe38ff1617abc835f0f5f8d09d18032c410fee04427baea26",
+      "size_bytes": 85384126,
+      "files": [
+        {
+          "filename": "consulta_cand_2020_BRASIL.csv",
+          "sha256": "5220038ae7623da65aa328924b296e82ea3baf51dbc74be7c2bd9343216d18dd",
+          "size_bytes": 292002037
+        }
+      ]
+    },
+    {
+      "source": "TSE - consulta_cand",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_2022.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T02:42:00Z",
+      "payload_sha256": "cebb0a932e24d8536c644fac04575f4829e7bfe89924a7f19adaf9c3f5d886da",
+      "size_bytes": 4389914,
+      "files": [
+        {
+          "filename": "consulta_cand_2022_BRASIL.csv",
+          "sha256": "67a3d672ef45780e9ad8ef6fbd86b03f44296b29fde02e980f091e30e2065eed",
+          "size_bytes": 15769035
+        }
+      ]
+    },
+    {
+      "source": "TSE - consulta_cand",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_2024.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T02:42:03Z",
+      "payload_sha256": "b67859228b22003d617222cd4268c2af792b1abec25d14a6d0b2b0660fb2a34f",
+      "size_bytes": 63694687,
+      "files": [
+        {
+          "filename": "consulta_cand_2024_BRASIL.csv",
+          "sha256": "df0178377bf76ed2422a0d0ad663613b3e11b49bf83003c73e199b2dd7c7c597",
+          "size_bytes": 243517244
+        }
+      ]
+    },
+    {
+      "source": "TSE - consulta_cand",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_2026.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T02:42:21Z",
+      "payload_sha256": "209f6c5868a2572f13a3cd69a1c77e4e4e64c242d48fb8afd993a3734496215b",
+      "size_bytes": 3153573,
+      "files": [
+        {
+          "filename": "consulta_cand_2026_BRASIL.csv",
+          "sha256": "5b491226997aa96c0c2781a6f3761e78e71c7d5bbf0bfb3f6c469a1c3186db1f",
+          "size_bytes": 11385317
+        }
+      ]
+    },
+    {
+      "source": "TSE - prestacao_contas",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/prestacao_contas/prestacao_de_contas_eleitorais_candidatos_2018.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T03:26:34Z",
+      "payload_sha256": "7ddb2bc09b6b0a29384bcc93206adb6356e18de1a0357dc71391f6310cd952d2",
+      "size_bytes": 379077360,
+      "files": [
+        {
+          "filename": "receitas_candidatos_2018_BRASIL.csv",
+          "sha256": "626d61f18f060a2e0d880a6b8a6f37922550685292a1e089b781109bbc732cfe",
+          "size_bytes": 233825038
+        }
+      ]
+    },
+    {
+      "source": "TSE - prestacao_contas",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/prestacao_contas/prestacao_de_contas_eleitorais_candidatos_2020.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T03:27:04Z",
+      "payload_sha256": "0f2a1574027c2c7e5e6109808054bdc2632a0aa9d97b4bb32d81bde541898c8c",
+      "size_bytes": 1389082849,
+      "files": [
+        {
+          "filename": "receitas_candidatos_2020_BRASIL.csv",
+          "sha256": "cb7009bab30c73b4a3b52fff82a826c74389a1dbc2701f1e01cc57bc75830bd3",
+          "size_bytes": 1649875178
+        }
+      ]
+    },
+    {
+      "source": "TSE - prestacao_contas",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/prestacao_contas/prestacao_de_contas_eleitorais_candidatos_2022.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T03:28:33Z",
+      "payload_sha256": "f93c0fa9c581c62023be226ee22c54ef8693cfde8e3af01599ea336b28b97fd1",
+      "size_bytes": 537261773,
+      "files": [
+        {
+          "filename": "receitas_candidatos_2022_BRASIL.csv",
+          "sha256": "53f230086ca25a4a758ed7bab0e224fa1822aceb3e2af9f808d7a01e015f38d3",
+          "size_bytes": 432460456
+        }
+      ]
+    },
+    {
+      "source": "TSE - prestacao_contas",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/prestacao_contas/prestacao_de_contas_eleitorais_candidatos_2024.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T03:29:06Z",
+      "payload_sha256": "b479acc3e5bdebd5a4d81af4b546c328b715e443330fffeb7cb51fe8c7d6c0dd",
+      "size_bytes": 1347649197,
+      "files": [
+        {
+          "filename": "receitas_candidatos_2024_BRASIL.csv",
+          "sha256": "63956112bd35e2c6ac3ff9f19f244bf0398f1f981efdd0496d260066db14a0dd",
+          "size_bytes": 1407272145
+        }
+      ]
+    },
+    {
+      "source": "TSE - prestacao_contas",
+      "url": "https://cdn.tse.jus.br/estatistica/sead/odsele/prestacao_contas/prestacao_de_contas_eleitorais_candidatos_2026.zip",
+      "http_status": 200,
+      "accessed_at": "2026-09-04T03:30:08Z",
+      "payload_sha256": "aae4b919280ab05e45ea3d0d42c07e552f18b0df7223d6f3710b44f926a5d955",
+      "size_bytes": 21826730,
+      "files": [
+        {
+          "filename": "receitas_candidatos_2026_BRASIL.csv",
+          "sha256": "dbccacca3847fbc7a51d26dfe4ce9f4eecc368149499afdcd5d677238c66f4f4",
+          "size_bytes": 24541808
+        }
+      ]
+    }
+  ]
+}

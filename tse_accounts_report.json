@@ -1,0 +1,32 @@
+{
+  "years": {
+    "2018": {
+      "collection_id": 6,
+      "new_orgs": 27020,
+      "rows": 329676
+    },
+    "2020": {
+      "collection_id": 7,
+      "new_orgs": 533165,
+      "rows": 2339056
+    },
+    "2022": {
+      "collection_id": 8,
+      "new_orgs": 27958,
+      "rows": 674944
+    },
+    "2024": {
+      "collection_id": 9,
+      "new_orgs": 444873,
+      "rows": 2040998
+    },
+    "2026": {
+      "collection_id": 10,
+      "new_orgs": 11390,
+      "rows": 36515
+    }
+  },
+  "orgs": 1044406,
+  "companies": 1044392,
+  "orgs_linked_to_person": 1044406
+}
