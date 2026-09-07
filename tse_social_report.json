@@ -1,0 +1,45 @@
+{
+  "years": {
+    "2018": {
+      "collection_id": 11,
+      "new_urls": 12424,
+      "rows": 12470
+    },
+    "2020": {
+      "collection_id": 12,
+      "new_urls": 316498,
+      "rows": 317548
+    },
+    "2022": {
+      "collection_id": 13,
+      "new_urls": 44656,
+      "rows": 44931
+    },
+    "2024": {
+      "collection_id": 14,
+      "new_urls": 412520,
+      "rows": 413663
+    },
+    "2026": {
+      "collection_id": 15,
+      "new_urls": 55465,
+      "rows": 55906
+    }
+  },
+  "urls": 841563,
+  "candidacies": 444963,
+  "linked_to_person": 839324,
+  "by_platform": {
+    "facebook": 366596,
+    "instagram": 293222,
+    "other": 86491,
+    "website": 35896,
+    "tiktok": 22472,
+    "youtube": 14003,
+    "x": 12979,
+    "whatsapp": 4819,
+    "linkedin": 2805,
+    "kwai": 1740,
+    "telegram": 540
+  }
+}

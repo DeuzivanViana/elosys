@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap">
+<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script src="./elo-data.js"></script>
+<style>
+html,body{margin:0;padding:0;background:#08080a;color:#f2f2f0;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#e0a83f;text-decoration:none}a:hover{color:#f2c86a}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-track{background:#08080a}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.13);border-radius:0}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.24)}
+@keyframes eloPulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.35)}}
+@keyframes eloSweep{0%{transform:translateY(-100%)}100%{transform:translateY(400%)}}
+@keyframes eloIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes eloDash{to{stroke-dashoffset:-24}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100%;overflow:hidden;background:radial-gradient(1200px 700px at 78% -8%,rgba(255,255,255,.055),transparent 60%),radial-gradient(900px 600px at 4% 108%,rgba(224,168,63,.07),transparent 62%),#08080a">
+
+  <nav style="{{ railStyle }}">
+    <div style="display:flex;align-items:center;gap:11px;padding:20px 18px 22px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer" onClick="{{ toggleRail }}">
+      <div style="width:26px;height:26px;flex:none;position:relative;border:1px solid rgba(255,255,255,.5);border-radius:50%;display:grid;place-items:center">
+        <div style="width:8px;height:8px;border-radius:50%;background:#e0a83f;box-shadow:0 0 14px #e0a83f"></div>
+      </div>
+      <div style="overflow:hidden;white-space:nowrap">
+        <div style="font:600 15px/1 'Space Grotesk',sans-serif;letter-spacing:.02em">EloSys</div>
+        <div style="font:400 8.5px/1.6 'IBM Plex Mono',monospace;letter-spacing:.28em;color:rgba(255,255,255,.34);text-transform:uppercase">intel. de dados públicos</div>
+      </div>
+    </div>
+    <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 10px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="10">
+        <button onClick="{{ n.go }}" title="{{ n.label }}" style="{{ n.style }}" style-hover="background:rgba(255,255,255,.06);color:#f2f2f0">
+          <span style="width:18px;flex:none;display:grid;place-items:center;opacity:.9" dangerouslySetInnerHTML="{{ n.icon }}"></span>
+          <span style="white-space:nowrap;overflow:hidden">{{ n.label }}</span>
+          <sc-if value="{{ n.badge }}" hint-placeholder-val="{{ true }}">
+            <span style="margin-left:auto;font:500 9px/1 'IBM Plex Mono',monospace;padding:3px 5px;border-radius:2px;background:rgba(224,86,63,.18);color:#e0563f">{{ n.badge }}</span>
+          </sc-if>
+        </button>
+      </sc-for>
+    </div>
+    <div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07);font:400 9px/1.7 'IBM Plex Mono',monospace;letter-spacing:.14em;color:rgba(255,255,255,.28);text-transform:uppercase;overflow:hidden;white-space:nowrap">
+      <div style="display:flex;align-items:center;gap:7px"><span style="width:5px;height:5px;border-radius:50%;background:#4fb286;animation:eloPulse 2.4s infinite"></span>ingestão ativa</div>
+      <div>v0.9 · dados fictícios</div>
+    </div>
+  </nav>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden">
+    <header style="display:flex;align-items:center;gap:16px;padding:0 26px;height:58px;flex:none;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(8,8,10,.72);backdrop-filter:blur(14px);z-index:6">
+      <div style="font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.42)">{{ crumb }}</div>
+      <div style="flex:1"></div>
+      <button onClick="{{ openPalette }}" style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.46);padding:8px 12px;border-radius:2px;cursor:pointer;font:400 11px/1 'IBM Plex Mono',monospace;min-width:270px" style-hover="border-color:rgba(255,255,255,.26);color:#f2f2f0">
+        <span style="opacity:.8">⌕</span><span>buscar CPF, CNPJ, nome, contrato…</span>
+        <span style="margin-left:auto;border:1px solid rgba(255,255,255,.14);padding:2px 5px;border-radius:2px;font-size:9px">⌘K</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 11px;border:1px solid rgba(224,168,63,.28);background:rgba(224,168,63,.07);border-radius:2px;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#e0a83f">demo · lorem</div>
+    </header>
+
+    <div style="flex:1;overflow-y:auto;overflow-x:hidden;position:relative">
+
+      <!-- ══════════ HOME ══════════ -->
+      <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+      <div style="animation:eloIn .5s ease both">
+        <section style="position:relative;padding:78px 56px 62px;border-bottom:1px solid rgba(255,255,255,.07);overflow:hidden">
+          <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(900px 420px at 22% 40%,#000,transparent 72%);pointer-events:none"></div>
+          <div style="position:relative;max-width:1080px">
+            <div style="display:flex;align-items:center;gap:12px;font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:26px">
+              <span style="width:34px;height:1px;background:rgba(255,255,255,.3)"></span>plataforma de correlação · fontes públicas
+            </div>
+            <h1 style="margin:0;font:300 clamp(44px,6.4vw,88px)/0.98 'Space Grotesk',sans-serif;letter-spacing:-.035em;text-wrap:balance">Onde os dados públicos<br><span style="color:rgba(255,255,255,.42)">deixam de ser</span> planilhas<br>e viram <span style="position:relative;display:inline-block">elos<span style="position:absolute;left:0;right:0;bottom:8px;height:9px;background:rgba(224,168,63,.28)"></span></span>.</h1>
+            <p style="margin:30px 0 0;max-width:600px;font:300 16px/1.68 'Space Grotesk',sans-serif;color:rgba(255,255,255,.56);text-wrap:pretty">Lorem ipsum dolor sit amet, consectetur adipiscing elit. O EloSys ingere dados abertos de TSE, Receita Federal, Portal da Transparência, CNJ e Diários Oficiais, normaliza por CPF e CNPJ e roda dez detectores de correlação sobre a base unificada. Sed do eiusmod tempor incididunt ut labore.</p>
+            <div style="display:flex;gap:12px;margin-top:36px;flex-wrap:wrap">
+              <button onClick="{{ goMapa }}" style="background:#f2f2f0;color:#08080a;border:0;padding:14px 22px;border-radius:2px;cursor:pointer;font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase" style-hover="background:#e0a83f">abrir mapa tátil →</button>
+              <button onClick="{{ goDetectores }}" style="background:transparent;color:#f2f2f0;border:1px solid rgba(255,255,255,.2);padding:14px 22px;border-radius:2px;cursor:pointer;font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase" style-hover="border-color:#f2f2f0;background:rgba(255,255,255,.05)">ver os 10 detectores</button>
+            </div>
+          </div>
+        </section>
+
+        <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));border-bottom:1px solid rgba(255,255,255,.07)">
+          <sc-for list="{{ heroStats }}" as="s" hint-placeholder-count="5">
+            <div style="padding:26px 28px;border-right:1px solid rgba(255,255,255,.07)">
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.36)">{{ s.label }}</div>
+              <div style="margin-top:12px;font:300 32px/1 'Space Grotesk',sans-serif;letter-spacing:-.03em">{{ s.value }}</div>
+              <div style="margin-top:7px;font:400 10px/1 'IBM Plex Mono',monospace;color:{{ s.tone }}">{{ s.delta }}</div>
+            </div>
+          </sc-for>
+        </section>
+
+        <section style="padding:56px 56px 20px">
+          <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:8px">
+            <h2 style="margin:0;font:400 26px/1.2 'Space Grotesk',sans-serif;letter-spacing:-.02em">Os dez detectores</h2>
+            <span style="font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.34)">cada um vira um painel próprio</span>
+          </div>
+          <p style="margin:0 0 30px;max-width:620px;font:300 14px/1.7 'Space Grotesk',sans-serif;color:rgba(255,255,255,.5)">Um detector é uma regra de correlação que roda sobre as tabelas normalizadas e produz alertas com score. Nenhum sinal é acusação — é ponto de partida para apuração. Ut enim ad minim veniam, quis nostrud exercitation.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.07)">
+            <sc-for list="{{ detCards }}" as="d" hint-placeholder-count="10">
+              <button onClick="{{ d.open }}" style="all:unset;cursor:pointer;display:block;background:#0b0b0d;padding:24px 24px 22px;position:relative;overflow:hidden" style-hover="background:#101013">
+                <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:{{ d.color }}"></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                  <span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;color:rgba(255,255,255,.32)">{{ d.num }}</span>
+                  <span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;color:{{ d.color }}">{{ d.riscoLabel }} {{ d.risco }}</span>
+                </div>
+                <div style="margin-top:16px;font:500 16px/1.3 'Space Grotesk',sans-serif;letter-spacing:-.01em">{{ d.nome }}</div>
+                <div style="margin-top:9px;font:300 12.5px/1.62 'Space Grotesk',sans-serif;color:rgba(255,255,255,.48);min-height:60px">{{ d.desc }}</div>
+                <div style="margin-top:16px;height:2px;background:rgba(255,255,255,.08)"><div style="height:2px;background:{{ d.color }};width:{{ d.risco }}%"></div></div>
+                <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px">
+                  <sc-for list="{{ d.fontes }}" as="f" hint-placeholder-count="2">
+                    <span style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;padding:5px 7px;border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.42);border-radius:2px">{{ f }}</span>
+                  </sc-for>
+                </div>
+              </button>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="padding:44px 56px 80px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px">
+            <div>
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:16px">como funciona</div>
+              <sc-for list="{{ pipeline }}" as="p" hint-placeholder-count="4">
+                <div style="display:flex;gap:14px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                  <span style="font:500 10px/1.6 'IBM Plex Mono',monospace;color:#e0a83f">{{ p.n }}</span>
+                  <div><div style="font:500 13px/1.4 'Space Grotesk',sans-serif">{{ p.t }}</div><div style="margin-top:4px;font:300 12px/1.6 'Space Grotesk',sans-serif;color:rgba(255,255,255,.45)">{{ p.d }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:16px">fontes conectadas</div>
+              <sc-for list="{{ fontes }}" as="f" hint-placeholder-count="6">
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{ f.cor }};flex:none"></span>
+                  <span style="font:400 12.5px/1 'Space Grotesk',sans-serif">{{ f.nome }}</span>
+                  <span style="margin-left:auto;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.36)">{{ f.status }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:16px">limites do sistema</div>
+              <p style="margin:0;font:300 13px/1.75 'Space Grotesk',sans-serif;color:rgba(255,255,255,.5);text-wrap:pretty">Processos em segredo de justiça não aparecem. Homonímia é tratada por CPF quando disponível, nunca por nome isolado. Score é probabilístico e serve para priorizar apuração — não constitui prova nem imputação. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ MAPA ══════════ -->
+      <sc-if value="{{ isMapa }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;height:100%;min-height:0">
+        <div style="flex:1;min-width:0;position:relative;background:radial-gradient(680px 480px at 50% 45%,rgba(255,255,255,.045),transparent 70%)">
+          <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:48px 48px;pointer-events:none"></div>
+          <x-import component-from-global-scope="elo-map" from="./brazil-map.js" hint-size="100%,100%"></x-import>
+          <div style="position:absolute;left:14px;bottom:14px;display:flex;gap:14px;align-items:center;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);background:rgba(8,8,10,.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.09);padding:9px 12px;border-radius:2px">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;background:rgba(214,64,52,.5);border:1px solid #e0563f"></span>crítico</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;background:rgba(196,132,32,.4);border:1px solid #e0a83f"></span>atenção</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.34)"></span>neutro</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;background:rgba(60,150,110,.25);border:1px solid #4fb286"></span>baixo</span>
+          </div>
+        </div>
+        <aside style="width:396px;flex:none;border-left:1px solid rgba(255,255,255,.07);background:#0a0a0c;overflow-y:auto">
+          <sc-if value="{{ noUF }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:28px 24px">
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34)">ranking por risco</div>
+              <p style="margin:14px 0 22px;font:300 13px/1.65 'Space Grotesk',sans-serif;color:rgba(255,255,255,.48)">Clique numa unidade federativa no mapa para expandir e carregar a malha municipal. Lorem ipsum dolor sit amet.</p>
+              <sc-for list="{{ ufRank }}" as="u" hint-placeholder-count="12">
+                <button onClick="{{ u.pick }}" style="all:unset;cursor:pointer;display:block;width:100%;padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.06)" style-hover="background:rgba(255,255,255,.05)">
+                  <div style="display:flex;align-items:center;gap:11px">
+                    <span style="font:500 11px/1 'IBM Plex Mono',monospace;width:22px;color:rgba(255,255,255,.75)">{{ u.sigla }}</span>
+                    <span style="font:300 12.5px/1 'Space Grotesk',sans-serif;color:rgba(255,255,255,.55);flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ u.nome }}</span>
+                    <span style="font:500 11px/1 'IBM Plex Mono',monospace;color:{{ u.cor }}">{{ u.risco }}</span>
+                  </div>
+                  <div style="margin-top:8px;height:2px;background:rgba(255,255,255,.07)"><div style="height:2px;background:{{ u.cor }};width:{{ u.risco }}%"></div></div>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ hasUF }}" hint-placeholder-val="{{ true }}">
+            <div style="animation:eloIn .4s ease both">
+              <div style="padding:24px 24px 20px;border-bottom:1px solid rgba(255,255,255,.07)">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                  <div>
+                    <div style="font:500 34px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em">{{ ufSel.sigla }}</div>
+                    <div style="margin-top:6px;font:300 13px/1 'Space Grotesk',sans-serif;color:rgba(255,255,255,.5)">{{ ufSel.nome }} · {{ ufSel.regiao }}</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font:500 24px/1 'IBM Plex Mono',monospace;color:{{ ufSel.cor }}">{{ ufSel.risco }}</div>
+                    <div style="margin-top:5px;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.36)">índice de risco</div>
+                  </div>
+                </div>
+                <div style="margin-top:18px;display:flex;gap:8px">
+                  <button onClick="{{ goEstado }}" style="flex:1;background:#f2f2f0;color:#08080a;border:0;padding:11px;border-radius:2px;cursor:pointer;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase" style-hover="background:#e0a83f">dashboard completo</button>
+                  <button onClick="{{ clearUF }}" style="background:transparent;color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.16);padding:11px 13px;border-radius:2px;cursor:pointer;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase" style-hover="border-color:#f2f2f0;color:#f2f2f0">limpar</button>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07)">
+                <sc-for list="{{ ufSel.kpis }}" as="k" hint-placeholder-count="6">
+                  <div style="background:#0a0a0c;padding:16px 18px">
+                    <div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">{{ k.label }}</div>
+                    <div style="margin-top:9px;font:400 19px/1 'Space Grotesk',sans-serif">{{ k.value }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ muni }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(224,168,63,.06)">
+                  <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:#e0a83f">município selecionado</div>
+                  <div style="margin-top:8px;font:400 16px/1.2 'Space Grotesk',sans-serif">{{ muni }}</div>
+                </div>
+              </sc-if>
+              <div style="padding:20px 24px">
+                <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:14px">alertas recentes na UF</div>
+                <sc-for list="{{ ufSel.alertas }}" as="a" hint-placeholder-count="5">
+                  <button onClick="{{ a.open }}" style="all:unset;cursor:pointer;display:block;width:100%;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.06)" style-hover="background:rgba(255,255,255,.04)">
+                    <div style="display:flex;align-items:center;gap:9px">
+                      <span style="width:6px;height:6px;border-radius:50%;background:{{ a.cor }};flex:none"></span>
+                      <span style="font:500 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.55)">{{ a.id }}</span>
+                      <span style="margin-left:auto;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.36)">{{ a.data }}</span>
+                    </div>
+                    <div style="margin-top:8px;font:400 13px/1.4 'Space Grotesk',sans-serif">{{ a.detectorNome }}</div>
+                    <div style="margin-top:4px;font:300 11.5px/1.5 'Space Grotesk',sans-serif;color:rgba(255,255,255,.44)">{{ a.politico }} · {{ a.valorFmt }}</div>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </aside>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ PAINEL DA UF ══════════ -->
+      <sc-if value="{{ semUF }}" hint-placeholder-val="{{ false }}">
+        <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:60px">
+          <div style="font:300 22px/1.3 'Space Grotesk',sans-serif;color:rgba(255,255,255,.6);text-align:center">Nenhuma unidade federativa selecionada</div>
+          <p style="margin:0;max-width:420px;text-align:center;font:300 13px/1.7 'Space Grotesk',sans-serif;color:rgba(255,255,255,.4)">Escolha um estado no mapa tátil para carregar o painel detalhado com alertas, contratos e ranking municipal.</p>
+          <button onClick="{{ voltarMapa }}" style="background:#f2f2f0;color:#08080a;border:0;padding:13px 20px;border-radius:2px;cursor:pointer;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase" style-hover="background:#e0a83f">ir para o mapa</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ estado }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:eloIn .4s ease both">
+        <section style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:34px 34px 26px;border-bottom:1px solid rgba(255,255,255,.07)">
+          <div>
+            <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.34)">painel estadual · {{ estado.regiao }}</div>
+            <div style="margin-top:12px;display:flex;align-items:baseline;gap:14px">
+              <span style="font:300 46px/1 'Space Grotesk',sans-serif;letter-spacing:-.03em">{{ estado.nome }}</span>
+              <span style="font:500 15px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">{{ estado.sigla }}</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:22px">
+            <div style="text-align:right">
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.34)">índice de risco</div>
+              <div style="margin-top:8px;font:400 38px/1 'IBM Plex Mono',monospace;color:{{ estado.cor }}">{{ estado.risco }}</div>
+              <div style="margin-top:4px;font:400 10px/1 'IBM Plex Mono',monospace;color:{{ estado.cor }}">{{ estado.nivel }}</div>
+            </div>
+            <button onClick="{{ voltarMapa }}" style="background:transparent;color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.16);padding:12px 16px;border-radius:2px;cursor:pointer;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase" style-hover="border-color:#f2f2f0;color:#f2f2f0">trocar UF</button>
+          </div>
+        </section>
+
+        <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07)">
+          <sc-for list="{{ estado.kpis }}" as="k" hint-placeholder-count="6">
+            <div style="background:#0a0a0c;padding:20px 22px">
+              <div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">{{ k.label }}</div>
+              <div style="margin-top:11px;font:300 26px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em">{{ k.value }}</div>
+              <div style="margin-top:7px;font:400 9.5px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.32)">{{ k.sub }}</div>
+            </div>
+          </sc-for>
+        </section>
+
+        <section style="display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:1px;background:rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07)">
+          <div style="background:#08080a;padding:26px 30px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34)">alertas por quinzena · 8 meses</div>
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.28)">série sintética</div>
+            </div>
+            <svg viewBox="0 0 640 90" preserveAspectRatio="none" style="width:100%;height:120px;margin-top:20px;display:block">
+              <sc-for list="{{ estado.barras }}" as="b" hint-placeholder-count="16">
+                <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" fill="{{ b.cor }}"></rect>
+              </sc-for>
+            </svg>
+            <div style="margin-top:24px;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:12px">sinal por detector</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.06)">
+              <sc-for list="{{ estado.detectores }}" as="d" hint-placeholder-count="10">
+                <button onClick="{{ d.open }}" style="all:unset;cursor:pointer;display:block;background:#0b0b0d;padding:13px 14px" style-hover="background:#101013">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span style="font:400 11px/1.3 'Space Grotesk',sans-serif;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:rgba(255,255,255,.7)">{{ d.nome }}</span>
+                    <span style="font:500 10px/1 'IBM Plex Mono',monospace;color:{{ d.cor }}">{{ d.v }}</span>
+                  </div>
+                  <div style="margin-top:9px;height:2px;background:rgba(255,255,255,.07)"><div style="height:2px;background:{{ d.cor }};width:{{ d.v }}%"></div></div>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#0a0a0c;padding:26px 28px">
+            <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34)">ranking municipal</div>
+            <div style="margin-top:16px">
+              <sc-for list="{{ estado.municipios }}" as="m" hint-placeholder-count="8">
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                  <span style="font:300 13px/1 'Space Grotesk',sans-serif;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ m.nome }}</span>
+                  <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.32)">{{ m.n }} alertas</span>
+                  <span style="width:52px;height:2px;background:rgba(255,255,255,.08)"><span style="display:block;height:2px;background:{{ m.cor }};width:{{ m.v }}%"></span></span>
+                  <span style="font:500 11px/1 'IBM Plex Mono',monospace;color:{{ m.cor }};width:22px;text-align:right">{{ m.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin-top:26px;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34)">maiores contratos</div>
+            <sc-for list="{{ estado.contratos }}" as="c" hint-placeholder-count="6">
+              <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">{{ c.id }}</span>
+                  <span style="margin-left:auto;font:500 11px/1 'IBM Plex Mono',monospace;color:{{ c.cor }}">{{ c.valor }}</span>
+                </div>
+                <div style="margin-top:6px;font:300 12.5px/1.4 'Space Grotesk',sans-serif">{{ c.fornecedor }}</div>
+                <div style="margin-top:3px;font:300 11px/1.4 'Space Grotesk',sans-serif;color:rgba(255,255,255,.36)">{{ c.orgao }} · {{ c.data }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="padding:26px 30px 60px">
+          <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:16px">alertas abertos na UF</div>
+          <sc-for list="{{ estado.alertas }}" as="a" hint-placeholder-count="8">
+            <button onClick="{{ a.open }}" style="all:unset;cursor:pointer;display:flex;width:100%;gap:18px;align-items:center;padding:15px 14px;border:1px solid rgba(255,255,255,.06);border-bottom:0;background:#0b0b0d" style-hover="background:#101013">
+              <span style="width:3px;height:34px;background:{{ a.cor }};flex:none"></span>
+              <span style="font:500 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.45);width:66px;flex:none">{{ a.id }}</span>
+              <span style="flex:1;min-width:0">
+                <span style="display:block;font:400 13.5px/1.3 'Space Grotesk',sans-serif">{{ a.nome }}</span>
+                <span style="display:block;margin-top:4px;font:300 11.5px/1.4 'Space Grotesk',sans-serif;color:rgba(255,255,255,.42)">{{ a.resumo }}</span>
+              </span>
+              <span style="font:300 12px/1 'Space Grotesk',sans-serif;color:rgba(255,255,255,.55);width:170px;flex:none;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ a.politico }}</span>
+              <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4);width:84px;flex:none">{{ a.valor }}</span>
+              <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.32);width:78px;flex:none">{{ a.data }}</span>
+              <span style="font:500 11px/1 'IBM Plex Mono',monospace;color:{{ a.cor }};width:30px;flex:none;text-align:right">{{ a.sev }}</span>
+            </button>
+          </sc-for>
+        </section>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ ALERTAS ══════════ -->
+      <sc-if value="{{ isAlertas }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:eloIn .4s ease both">
+        <section style="padding:30px 30px 22px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;justify-content:space-between">
+          <div>
+            <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.34)">fila de investigação</div>
+            <div style="margin-top:12px;display:flex;align-items:baseline;gap:12px">
+              <span style="font:300 38px/1 'Space Grotesk',sans-serif;letter-spacing:-.03em">{{ filaTotal }}</span>
+              <span style="font:300 14px/1 'Space Grotesk',sans-serif;color:rgba(255,255,255,.45)">alertas no filtro atual</span>
+            </div>
+          </div>
+          <input value="{{ tq }}" onChange="{{ onTQ }}" placeholder="filtrar por político, detector, UF…" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#f2f2f0;padding:11px 14px;border-radius:2px;font:400 11px/1 'IBM Plex Mono',monospace;outline:none;min-width:280px"/>
+        </section>
+        <section style="padding:18px 30px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;flex-wrap:wrap;gap:22px;align-items:center">
+          <span style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.3)">severidade</span>
+          <div style="display:flex;gap:7px">
+            <sc-for list="{{ sevOpts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.pick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+          </div>
+          <span style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.3)">status</span>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <sc-for list="{{ statusOpts }}" as="o" hint-placeholder-count="5"><button onClick="{{ o.pick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+          </div>
+        </section>
+        <section style="padding:22px 30px 10px">
+          <sc-for list="{{ fila }}" as="a" hint-placeholder-count="10">
+            <button onClick="{{ a.open }}" style="all:unset;cursor:pointer;display:flex;width:100%;gap:16px;align-items:center;padding:15px 16px;border-bottom:1px solid rgba(255,255,255,.06)" style-hover="background:rgba(255,255,255,.045)">
+              <span style="width:7px;height:7px;border-radius:50%;background:{{ a.cor }};flex:none;box-shadow:0 0 10px {{ a.cor }}"></span>
+              <span style="font:500 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.45);width:68px;flex:none">{{ a.id }}</span>
+              <span style="flex:1;min-width:0">
+                <span style="display:block;font:400 13.5px/1.3 'Space Grotesk',sans-serif">{{ a.nome }}</span>
+                <span style="display:block;margin-top:4px;font:300 11.5px/1.4 'Space Grotesk',sans-serif;color:rgba(255,255,255,.42)">{{ a.politico }} · {{ a.entidade }}</span>
+              </span>
+              <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.42);width:34px;flex:none">{{ a.uf }}</span>
+              <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.42);width:84px;flex:none">{{ a.valor }}</span>
+              <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3);width:78px;flex:none">{{ a.data }}</span>
+              <span style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.12);padding:5px 8px;border-radius:2px;width:92px;flex:none;text-align:center">{{ a.status }}</span>
+              <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:{{ a.cor }};width:30px;flex:none;text-align:right">{{ a.sev }}</span>
+            </button>
+          </sc-for>
+        </section>
+        <sc-if value="{{ verMatriz }}" hint-placeholder-val="{{ true }}">
+        <section style="padding:34px 30px 60px">
+          <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:6px">matriz político × detector</div>
+          <p style="margin:0 0 20px;max-width:560px;font:300 12.5px/1.6 'Space Grotesk',sans-serif;color:rgba(255,255,255,.42)">Cada coluna é um detector, cada linha um político. A intensidade da célula é o score do sinal — passe o mouse para o rótulo.</p>
+          <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:8px">
+            <div style="width:210px;flex:none"></div>
+            <div style="flex:1;display:grid;grid-template-columns:repeat(10,1fr);gap:4px">
+              <sc-for list="{{ detColunas }}" as="c" hint-placeholder-count="10">
+                <div title="{{ c.nome }}" style="font:400 9px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.34);text-align:center">{{ c.n }}</div>
+              </sc-for>
+            </div>
+            <div style="width:44px;flex:none"></div>
+          </div>
+          <sc-for list="{{ matriz }}" as="r" hint-placeholder-count="14">
+            <button onClick="{{ r.open }}" style="all:unset;cursor:pointer;display:flex;width:100%;gap:12px;align-items:center;padding:5px 0" style-hover="background:rgba(255,255,255,.04)">
+              <span style="width:210px;flex:none;font:300 12px/1 'Space Grotesk',sans-serif;color:rgba(255,255,255,.6);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ r.nome }}</span>
+              <span style="flex:1;display:grid;grid-template-columns:repeat(10,1fr);gap:4px">
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="10">
+                  <span title="{{ c.title }}" style="{{ c.style }}"></span>
+                </sc-for>
+              </span>
+              <span style="width:44px;flex:none;text-align:right;font:500 11px/1 'IBM Plex Mono',monospace;color:{{ r.cor }}">{{ r.risco }}</span>
+            </button>
+          </sc-for>
+        </section>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ DETECTORES ══════════ -->
+      <sc-if value="{{ isDetectores }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;min-height:100%;animation:eloIn .4s ease both">
+        <div style="width:290px;flex:none;border-right:1px solid rgba(255,255,255,.07);background:#0a0a0c">
+          <div style="padding:20px 16px 14px;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);border-bottom:1px solid rgba(255,255,255,.07)">10 detectores</div>
+          <sc-for list="{{ detLista }}" as="d" hint-placeholder-count="10">
+            <button onClick="{{ d.open }}" style="{{ d.style }}" style-hover="background:rgba(255,255,255,.05)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font:500 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.32)">{{ d.num }}</span>
+                <span style="font:400 12.5px/1.3 'Space Grotesk',sans-serif;flex:1">{{ d.nome }}</span>
+                <span style="font:500 10px/1 'IBM Plex Mono',monospace;color:{{ d.cor }}">{{ d.v }}</span>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+        <div style="flex:1;min-width:0;padding:34px 36px 60px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px">
+            <div style="max-width:660px">
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.34)">detector {{ detNum }} · {{ detSel.curto }}</div>
+              <h2 style="margin:14px 0 0;font:300 34px/1.15 'Space Grotesk',sans-serif;letter-spacing:-.025em">{{ detSel.nome }}</h2>
+              <p style="margin:16px 0 0;font:300 15px/1.7 'Space Grotesk',sans-serif;color:rgba(255,255,255,.55);text-wrap:pretty">{{ detSel.desc }}</p>
+            </div>
+            <div style="text-align:right;flex:none">
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.34)">score médio</div>
+              <div style="margin-top:8px;font:400 40px/1 'IBM Plex Mono',monospace;color:{{ detCor }}">{{ detRisco }}</div>
+              <div style="margin-top:4px;font:400 10px/1 'IBM Plex Mono',monospace;color:{{ detCor }}">{{ detNivel }}</div>
+            </div>
+          </div>
+          <div style="margin-top:34px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.07)">
+            <div style="background:#0b0b0d;padding:20px 22px">
+              <div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">como correlaciona</div>
+              <p style="margin:12px 0 0;font:300 13px/1.65 'Space Grotesk',sans-serif;color:rgba(255,255,255,.62)">{{ detSel.correl }}</p>
+            </div>
+            <div style="background:#0b0b0d;padding:20px 22px">
+              <div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">de onde vem</div>
+              <div style="margin-top:14px;display:flex;flex-direction:column;gap:9px">
+                <sc-for list="{{ detSel.fontes }}" as="f" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:9px;font:300 12.5px/1.3 'Space Grotesk',sans-serif;color:rgba(255,255,255,.6)"><span style="width:5px;height:5px;border-radius:50%;background:#4fb286"></span>{{ f }}</div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background:#0b0b0d;padding:20px 22px">
+              <div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">tabelas envolvidas</div>
+              <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:7px">
+                <sc-for list="{{ detSel.tabelas }}" as="t" hint-placeholder-count="3">
+                  <span style="font:400 10px/1 'IBM Plex Mono',monospace;padding:6px 9px;border:1px solid rgba(255,255,255,.12);border-radius:2px;color:rgba(255,255,255,.55)">{{ t }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:38px;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:12px">ocorrências detectadas</div>
+          <sc-for list="{{ detAl }}" as="a" hint-placeholder-count="8">
+            <button onClick="{{ a.open }}" style="all:unset;cursor:pointer;display:flex;width:100%;gap:16px;align-items:center;padding:14px 12px;border-bottom:1px solid rgba(255,255,255,.06)" style-hover="background:rgba(255,255,255,.045)">
+              <span style="width:3px;height:26px;background:{{ a.cor }};flex:none"></span>
+              <span style="font:500 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.45);width:68px;flex:none">{{ a.id }}</span>
+              <span style="flex:1;min-width:0;font:400 13px/1.3 'Space Grotesk',sans-serif;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ a.politico }}</span>
+              <span style="flex:1;min-width:0;font:300 12px/1.3 'Space Grotesk',sans-serif;color:rgba(255,255,255,.45);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ a.entidade }}</span>
+              <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.42);width:32px;flex:none">{{ a.uf }}</span>
+              <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.42);width:84px;flex:none">{{ a.valor }}</span>
+              <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3);width:78px;flex:none">{{ a.data }}</span>
+              <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:{{ a.cor }};width:30px;flex:none;text-align:right">{{ a.sev }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ POLÍTICO ══════════ -->
+      <sc-if value="{{ isPolitico }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;min-height:100%;animation:eloIn .4s ease both">
+        <div style="width:280px;flex:none;border-right:1px solid rgba(255,255,255,.07);background:#0a0a0c">
+          <div style="padding:16px 14px;border-bottom:1px solid rgba(255,255,255,.07)">
+            <input value="{{ tq }}" onChange="{{ onTQ }}" placeholder="filtrar políticos…" style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#f2f2f0;padding:9px 11px;border-radius:2px;font:400 11px/1 'IBM Plex Mono',monospace;outline:none"/>
+          </div>
+          <sc-for list="{{ polLista }}" as="p" hint-placeholder-count="14">
+            <button onClick="{{ p.open }}" style="{{ p.style }}" style-hover="background:rgba(255,255,255,.05)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font:400 12.5px/1.3 'Space Grotesk',sans-serif;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ p.nome }}</span>
+                <span style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.34)">{{ p.partido }}/{{ p.uf }}</span>
+                <span style="font:500 10px/1 'IBM Plex Mono',monospace;color:{{ p.cor }}">{{ p.risco }}</span>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+        <div style="flex:1;min-width:0;padding:32px 34px 60px">
+          <div style="display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap">
+            <div style="width:78px;height:78px;flex:none;border:1px solid rgba(255,255,255,.16);border-radius:50%;display:grid;place-items:center;font:400 24px/1 'Space Grotesk',sans-serif;color:rgba(255,255,255,.75);background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.1),transparent 70%)">{{ perfil.iniciais }}</div>
+            <div style="flex:1;min-width:240px">
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.34)">ficha consolidada · CPF {{ perfil.cpf }}</div>
+              <h2 style="margin:12px 0 0;font:300 36px/1.1 'Space Grotesk',sans-serif;letter-spacing:-.025em">{{ perfil.nome }}</h2>
+              <div style="margin-top:10px;font:300 13.5px/1 'Space Grotesk',sans-serif;color:rgba(255,255,255,.5)">{{ perfil.cargo }} · {{ perfil.partido }}/{{ perfil.uf }}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.34)">risco agregado</div>
+              <div style="margin-top:8px;font:400 40px/1 'IBM Plex Mono',monospace;color:{{ perfil.cor }}">{{ perfil.risco }}</div>
+              <div style="margin-top:4px;font:400 10px/1 'IBM Plex Mono',monospace;color:{{ perfil.cor }}">{{ perfil.nivel }}</div>
+            </div>
+          </div>
+          <div style="margin-top:26px;display:flex;flex-wrap:wrap;gap:7px">
+            <sc-for list="{{ perfil.sinais }}" as="s" hint-placeholder-count="10"><span style="{{ s.style }}">{{ s.nome }}</span></sc-for>
+          </div>
+          <div style="margin-top:28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.07)">
+            <sc-for list="{{ perfil.kpis }}" as="k" hint-placeholder-count="4">
+              <div style="background:#0b0b0d;padding:18px 20px">
+                <div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">{{ k.label }}</div>
+                <div style="margin-top:10px;font:300 24px/1 'Space Grotesk',sans-serif">{{ k.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:34px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:30px">
+            <div>
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:14px">evolução de mandatos</div>
+              <sc-for list="{{ perfil.mandatos }}" as="m" hint-placeholder-count="4">
+                <div style="display:flex;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                  <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.65);width:40px">{{ m.ano }}</span>
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{ m.cor }};flex:none"></span>
+                  <span style="font:300 13px/1.3 'Space Grotesk',sans-serif;flex:1">{{ m.cargo }}</span>
+                  <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">{{ m.partido }}</span>
+                  <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:{{ m.cor }};width:70px;text-align:right">{{ m.situacao }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:14px">patrimônio declarado</div>
+              <sc-for list="{{ perfil.patrimonio }}" as="p" hint-placeholder-count="4">
+                <div style="padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.65);width:40px">{{ p.ano }}</span>
+                    <span style="font:400 13px/1 'Space Grotesk',sans-serif;flex:1">{{ p.valor }}</span>
+                    <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:{{ p.cor }}">{{ p.var }}</span>
+                  </div>
+                  <div style="margin-top:9px;height:3px;background:rgba(255,255,255,.07)"><div style="height:3px;background:{{ p.cor }};width:{{ p.pct }}%"></div></div>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:14px">doações recebidas</div>
+              <sc-for list="{{ perfil.doacoes }}" as="d" hint-placeholder-count="4">
+                <div style="display:flex;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                  <span style="width:5px;height:5px;border-radius:50%;background:{{ d.cor }};flex:none"></span>
+                  <span style="font:300 12.5px/1.3 'Space Grotesk',sans-serif;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ d.doador }}</span>
+                  <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.55)">{{ d.valor }}</span>
+                  <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3)">{{ d.data }}</span>
+                </div>
+              </sc-for>
+              <div style="margin-top:26px;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34);margin-bottom:14px">processos públicos</div>
+              <sc-for list="{{ perfil.processos }}" as="p" hint-placeholder-count="3">
+                <div style="padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                  <div style="display:flex;gap:10px;align-items:center">
+                    <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.42)">{{ p.tribunal }}</span>
+                    <span style="font:300 12.5px/1.3 'Space Grotesk',sans-serif;flex:1">{{ p.assunto }}</span>
+                    <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:{{ p.cor }}">{{ p.fase }}</span>
+                  </div>
+                  <div style="margin-top:5px;font:400 9.5px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.28)">{{ p.id }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ REDE ══════════ -->
+      <sc-if value="{{ isRede }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;height:100%;animation:eloIn .4s ease both">
+        <div style="flex:1;min-width:0;position:relative;background:radial-gradient(700px 500px at 50% 45%,rgba(255,255,255,.04),transparent 70%)">
+          <svg viewBox="0 0 1000 660" style="width:100%;height:100%;display:block">
+            <sc-for list="{{ redeEdges }}" as="e" hint-placeholder-count="24">
+              <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" stroke="{{ e.cor }}" stroke-width="{{ e.w }}" stroke-dasharray="3 5" style="animation:eloDash 2.6s linear infinite"></line>
+            </sc-for>
+            <sc-for list="{{ redeNodes }}" as="n" hint-placeholder-count="30">
+              <g onClick="{{ n.open }}" style="cursor:pointer">
+                <circle cx="{{ n.x }}" cy="{{ n.y }}" r="{{ n.r }}" fill="{{ n.fill }}" stroke="{{ n.cor }}" stroke-width="1.4"></circle>
+                <text x="{{ n.x }}" y="{{ n.y }}" dy="-18" text-anchor="middle" fill="rgba(255,255,255,.55)" font-family="'IBM Plex Mono',monospace" font-size="9">{{ n.label }}</text>
+              </g>
+            </sc-for>
+          </svg>
+          <div style="position:absolute;left:16px;bottom:16px;display:flex;gap:14px;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);background:rgba(8,8,10,.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.09);padding:9px 12px;border-radius:2px">
+            <span>— sócio</span><span style="color:rgba(79,178,134,.8)">— doação</span><span style="color:rgba(255,255,255,.3)">— contrato</span>
+          </div>
+        </div>
+        <aside style="width:330px;flex:none;border-left:1px solid rgba(255,255,255,.07);background:#0a0a0c;padding:26px 24px;overflow-y:auto">
+          <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.34)">grafo societário</div>
+          <p style="margin:14px 0 24px;font:300 13px/1.7 'Space Grotesk',sans-serif;color:rgba(255,255,255,.5)">Nós maiores são políticos, nós menores são CNPJ. Uma aresta existe quando o CPF aparece no quadro societário, recebe contrato ou doação vinculada. Clique num político para abrir a ficha.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.07)">
+            <div style="background:#0a0a0c;padding:15px 16px"><div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">nós</div><div style="margin-top:9px;font:300 22px/1 'Space Grotesk',sans-serif">32</div></div>
+            <div style="background:#0a0a0c;padding:15px 16px"><div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">arestas</div><div style="margin-top:9px;font:300 22px/1 'Space Grotesk',sans-serif">38</div></div>
+            <div style="background:#0a0a0c;padding:15px 16px"><div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">componentes</div><div style="margin-top:9px;font:300 22px/1 'Space Grotesk',sans-serif">4</div></div>
+            <div style="background:#0a0a0c;padding:15px 16px"><div style="font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.34)">densidade</div><div style="margin-top:9px;font:300 22px/1 'Space Grotesk',sans-serif">0,08</div></div>
+          </div>
+        </aside>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ CONTRATOS ══════════ -->
+      <sc-if value="{{ isContratos }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:30px 30px 60px;animation:eloIn .4s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px">
+          <div>
+            <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.34)">portal da transparência · contratos e licitações</div>
+            <h2 style="margin:12px 0 0;font:300 32px/1 'Space Grotesk',sans-serif;letter-spacing:-.025em">Contratos públicos</h2>
+          </div>
+          <input value="{{ tq }}" onChange="{{ onTQ }}" placeholder="fornecedor, órgão, objeto…" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#f2f2f0;padding:11px 14px;border-radius:2px;font:400 11px/1 'IBM Plex Mono',monospace;outline:none;min-width:280px"/>
+        </div>
+        <div style="overflow-x:auto"><div style="min-width:1180px">
+        <div style="display:flex;gap:16px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.1);font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.32)">
+          <span style="width:82px;flex:none">contrato</span><span style="flex:1.2">fornecedor</span><span style="flex:1.4">objeto</span><span style="width:170px;flex:none">órgão</span><span style="width:110px;flex:none">modalidade</span><span style="width:90px;flex:none;text-align:right">valor</span><span style="width:78px;flex:none;text-align:right">data</span><span style="width:56px;flex:none;text-align:right">risco</span>
+        </div>
+        <sc-for list="{{ contratos }}" as="c" hint-placeholder-count="14">
+          <div style="display:flex;gap:16px;align-items:center;padding:13px 14px;border-bottom:1px solid rgba(255,255,255,.055)" style-hover="background:rgba(255,255,255,.04)">
+            <span style="width:82px;flex:none;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.42)">{{ c.id }}</span>
+            <span style="flex:1.2;min-width:0;font:400 12.5px/1.3 'Space Grotesk',sans-serif;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ c.fornecedor }}</span>
+            <span style="flex:1.4;min-width:0;font:300 12px/1.3 'Space Grotesk',sans-serif;color:rgba(255,255,255,.48);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ c.objeto }}</span>
+            <span style="width:170px;flex:none;font:300 11.5px/1.3 'Space Grotesk',sans-serif;color:rgba(255,255,255,.4);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ c.orgao }}</span>
+            <span style="width:110px;flex:none;font:400 9.5px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.38)">{{ c.modalidade }}</span>
+            <span style="width:90px;flex:none;text-align:right;font:400 11.5px/1 'IBM Plex Mono',monospace">{{ c.valor }}</span>
+            <span style="width:78px;flex:none;text-align:right;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3)">{{ c.data }}</span>
+            <span style="width:56px;flex:none;display:flex;align-items:center;gap:6px;justify-content:flex-end"><span style="width:22px;height:2px;background:rgba(255,255,255,.1)"><span style="display:block;height:2px;background:{{ c.cor }};width:{{ c.risco }}%"></span></span><span style="font:500 11px/1 'IBM Plex Mono',monospace;color:{{ c.cor }}">{{ c.risco }}</span></span>
+          </div>
+        </sc-for>
+        </div></div>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ DOAÇÕES ══════════ -->
+      <sc-if value="{{ isDoacoes }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:30px 30px 60px;animation:eloIn .4s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px">
+          <div>
+            <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.34)">TSE · prestação de contas 2018–2024</div>
+            <h2 style="margin:12px 0 0;font:300 32px/1 'Space Grotesk',sans-serif;letter-spacing:-.025em">Doações de campanha</h2>
+          </div>
+          <input value="{{ tq }}" onChange="{{ onTQ }}" placeholder="doador, destinatário, partido…" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#f2f2f0;padding:11px 14px;border-radius:2px;font:400 11px/1 'IBM Plex Mono',monospace;outline:none;min-width:280px"/>
+        </div>
+        <div style="overflow-x:auto"><div style="min-width:1180px">
+        <div style="display:flex;gap:16px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.1);font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.32)">
+          <span style="width:74px;flex:none">id</span><span style="flex:1.3">doador</span><span style="width:150px;flex:none">documento</span><span style="flex:1.1">destinatário</span><span style="width:70px;flex:none">partido</span><span style="width:90px;flex:none;text-align:right">valor</span><span style="width:78px;flex:none;text-align:right">data</span><span style="width:76px;flex:none;text-align:right">limite</span><span style="width:40px;flex:none;text-align:right">risco</span>
+        </div>
+        <sc-for list="{{ doacoes }}" as="d" hint-placeholder-count="14">
+          <div style="display:flex;gap:16px;align-items:center;padding:13px 14px;border-bottom:1px solid rgba(255,255,255,.055)" style-hover="background:rgba(255,255,255,.04)">
+            <span style="width:74px;flex:none;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.42)">{{ d.id }}</span>
+            <span style="flex:1.3;min-width:0;font:400 12.5px/1.3 'Space Grotesk',sans-serif;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ d.doador }}</span>
+            <span style="width:150px;flex:none;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.36)">{{ d.doc }}</span>
+            <span style="flex:1.1;min-width:0;font:300 12px/1.3 'Space Grotesk',sans-serif;color:rgba(255,255,255,.55);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ d.destino }}</span>
+            <span style="width:70px;flex:none;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.42)">{{ d.partido }}/{{ d.uf }}</span>
+            <span style="width:90px;flex:none;text-align:right;font:400 11.5px/1 'IBM Plex Mono',monospace">{{ d.valor }}</span>
+            <span style="width:78px;flex:none;text-align:right;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3)">{{ d.data }}</span>
+            <span style="width:76px;flex:none;text-align:right;font:400 9.5px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">{{ d.teto }}</span>
+            <span style="width:40px;flex:none;text-align:right;font:500 11px/1 'IBM Plex Mono',monospace;color:{{ d.cor }}">{{ d.risco }}</span>
+          </div>
+        </sc-for>
+        </div></div>
+      </div>
+      </sc-if>
+
+      <!-- ══════════ PROCESSOS ══════════ -->
+      <sc-if value="{{ isProcessos }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:30px 30px 60px;animation:eloIn .4s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:8px">
+          <div>
+            <div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.34)">CNJ / DataJud · consultas processuais</div>
+            <h2 style="margin:12px 0 0;font:300 32px/1 'Space Grotesk',sans-serif;letter-spacing:-.025em">Processos judiciais</h2>
+          </div>
+          <input value="{{ tq }}" onChange="{{ onTQ }}" placeholder="parte, tribunal, assunto…" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#f2f2f0;padding:11px 14px;border-radius:2px;font:400 11px/1 'IBM Plex Mono',monospace;outline:none;min-width:280px"/>
+        </div>
+        <p style="margin:0 0 22px;max-width:620px;font:300 12.5px/1.65 'Space Grotesk',sans-serif;color:rgba(255,255,255,.42)">Processos em segredo de justiça não são indexados e não aparecem aqui. A presença de um processo não implica condenação.</p>
+        <div style="overflow-x:auto"><div style="min-width:1240px">
+        <div style="display:flex;gap:16px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.1);font:400 8.5px/1 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.32)">
+          <span style="width:210px;flex:none">número</span><span style="flex:1">parte</span><span style="width:76px;flex:none">tribunal</span><span style="flex:1">assunto</span><span style="width:130px;flex:none">fase</span><span style="width:110px;flex:none">situação</span><span style="width:78px;flex:none;text-align:right">autuação</span><span style="width:40px;flex:none;text-align:right">risco</span>
+        </div>
+        <sc-for list="{{ processos }}" as="p" hint-placeholder-count="14">
+          <div style="display:flex;gap:16px;align-items:center;padding:13px 14px;border-bottom:1px solid rgba(255,255,255,.055)" style-hover="background:rgba(255,255,255,.04)">
+            <span style="width:210px;flex:none;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">{{ p.id }}</span>
+            <span style="flex:1;min-width:0;font:400 12.5px/1.3 'Space Grotesk',sans-serif;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ p.parte }}</span>
+            <span style="width:76px;flex:none;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.45)">{{ p.tribunal }}</span>
+            <span style="flex:1;min-width:0;font:300 12px/1.3 'Space Grotesk',sans-serif;color:rgba(255,255,255,.5);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ p.assunto }}</span>
+            <span style="width:130px;flex:none;font:400 9.5px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">{{ p.fase }}</span>
+            <span style="width:110px;flex:none;font:400 9.5px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">{{ p.situacao }}</span>
+            <span style="width:78px;flex:none;text-align:right;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3)">{{ p.autuacao }}</span>
+            <span style="width:40px;flex:none;text-align:right;font:500 11px/1 'IBM Plex Mono',monospace;color:{{ p.cor }}">{{ p.risco }}</span>
+          </div>
+        </sc-for>
+        </div></div>
+      </div>
+      </sc-if>
+
+    </div>
+  </main>
+
+  <sc-if value="{{ palette }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePalette }}" style="position:fixed;inset:0;background:rgba(4,4,5,.72);backdrop-filter:blur(6px);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh">
+      <div onClick="{{ stop }}" style="width:min(680px,92vw);background:#0d0d10;border:1px solid rgba(255,255,255,.14);border-radius:3px;box-shadow:0 40px 120px rgba(0,0,0,.7);overflow:hidden;animation:eloIn .18s ease both">
+        <input value="{{ q }}" onChange="{{ onQuery }}" autoFocus="{{ true }}" placeholder="CPF, CNPJ, nome de político, empresa, contrato…" style="width:100%;background:transparent;border:0;border-bottom:1px solid rgba(255,255,255,.1);color:#f2f2f0;padding:18px 20px;font:400 14px/1 'IBM Plex Mono',monospace;outline:none"/>
+        <div style="max-height:52vh;overflow-y:auto">
+          <sc-for list="{{ results }}" as="r" hint-placeholder-count="6">
+            <button onClick="{{ r.open }}" style="all:unset;cursor:pointer;display:flex;width:100%;gap:12px;align-items:center;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.05)" style-hover="background:rgba(255,255,255,.06)">
+              <span style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.34);width:74px;flex:none">{{ r.tipo }}</span>
+              <span style="font:400 13px/1.3 'Space Grotesk',sans-serif;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ r.label }}</span>
+              <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:{{ r.cor }}">{{ r.meta }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;escalaRisco&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cor&quot;,&quot;mono&quot;],&quot;default&quot;:&quot;cor&quot;,&quot;tsType&quot;:&quot;'cor' | 'mono'&quot;,&quot;section&quot;:&quot;Aparência&quot;},&quot;mostrarMatriz&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Painéis&quot;},&quot;drillMunicipios&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Mapa&quot;}}">
+class Component extends DCLogic {
+  state = { view: "home", uf: null, muni: null, det: null, pol: null, q: "", rail: true, palette: false, sev: "todos", status: "todos" };
+
+  componentDidMount() {
+    this._uf = (e) => { const uf = e.detail && e.detail.uf; this.setState({ uf, muni: null }); };
+    this._mu = (e) => this.setState({ muni: e.detail && e.detail.nome });
+    this._kd = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); this.setState(s => ({ palette: !s.palette })); }
+      if (e.key === "Escape") this.setState({ palette: false });
+    };
+    window.ELO_NO_MUNIS = this.props.drillMunicipios === false;
+    window.addEventListener("elo:uf", this._uf);
+    window.addEventListener("elo:muni", this._mu);
+    window.addEventListener("keydown", this._kd);
+  }
+  componentWillUnmount() {
+    window.removeEventListener("elo:uf", this._uf);
+    window.removeEventListener("elo:muni", this._mu);
+    window.removeEventListener("keydown", this._kd);
+  }
+
+  D() { return window.ELO || { UFS: [], DETECTORES: [], POLITICOS: [], ALERTAS: [], CONTRATOS: [], DOACOES: [], PROCESSOS: [], NODES: [], EDGES: [], SERIES: [], byUF: {}, fmtBRL: v => v }; }
+  cor(v) {
+    if ((this.props.escalaRisco || "cor") === "mono") return v >= 78 ? "#f2f2f0" : v >= 52 ? "#b8b8b4" : v >= 30 ? "#7d7d7a" : "#4e4e4c";
+    return v >= 78 ? "#e0563f" : v >= 52 ? "#e0a83f" : v >= 30 ? "#9a9a97" : "#4fb286";
+  }
+  nivel(v) { return v >= 78 ? "crítico" : v >= 52 ? "atenção" : v >= 30 ? "neutro" : "baixo"; }
+  go(view, extra) { this.setState(Object.assign({ view, palette: false }, extra || {})); }
+  setUF(uf) { this.setState({ uf, muni: null }); window.dispatchEvent(new CustomEvent("elo:setuf", { detail: { uf } })); }
+
+  icon(k) {
+    const s = 'fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"';
+    const p = {
+      home: '<path d="M2 7 8 2l6 5v7H2z" ' + s + '/>',
+      mapa: '<path d="M2 4l4-2 4 2 4-2v10l-4 2-4-2-4 2z" ' + s + '/><path d="M6 2v10M10 4v10" ' + s + '/>',
+      estado: '<rect x="2" y="2" width="5" height="6" ' + s + '/><rect x="9" y="2" width="5" height="4" ' + s + '/><rect x="2" y="10" width="5" height="4" ' + s + '/><rect x="9" y="8" width="5" height="6" ' + s + '/>',
+      alertas: '<path d="M8 2l6 11H2z" ' + s + '/><path d="M8 6v4M8 11.6v.1" ' + s + '/>',
+      detect: '<circle cx="7" cy="7" r="4.4" ' + s + '/><path d="M10.4 10.4L14 14" ' + s + '/>',
+      pol: '<circle cx="8" cy="5.4" r="2.8" ' + s + '/><path d="M2.6 14c.6-3 2.8-4.4 5.4-4.4S12.8 11 13.4 14" ' + s + '/>',
+      rede: '<circle cx="8" cy="3.2" r="1.7" ' + s + '/><circle cx="3" cy="12" r="1.7" ' + s + '/><circle cx="13" cy="12" r="1.7" ' + s + '/><path d="M7 4.6L4 10.4M9 4.6l3 5.8M4.7 12h6.6" ' + s + '/>',
+      contr: '<path d="M3.5 2h6l3 3v9h-9z" ' + s + '/><path d="M5.6 8h5M5.6 10.6h5" ' + s + '/>',
+      doa: '<circle cx="8" cy="8" r="6" ' + s + '/><path d="M8 4.6v6.8M6 6.4h3.2a1.6 1.6 0 010 3.2H6.4" ' + s + '/>',
+      proc: '<path d="M8 2v11M3 5h10M4.6 5l-2 4.2a2.4 2.4 0 004 0zM11.4 5l-2 4.2a2.4 2.4 0 004 0zM5 14h6" ' + s + '/>'
+    }[k] || "";
+    return { __html: '<svg width="16" height="16" viewBox="0 0 16 16">' + p + "</svg>" };
+  }
+
+  bars(arr, w, h) {
+    const max = Math.max.apply(null, arr) || 1, n = arr.length, gap = 2, bw = (w - gap * (n - 1)) / n;
+    return arr.map((v, i) => ({ x: i * (bw + gap), y: h - (v / max) * h, w: bw, h: Math.max(1, (v / max) * h), key: "b" + i, cor: v / max > .8 ? "#e0563f" : v / max > .55 ? "#e0a83f" : "rgba(255,255,255,.24)" }));
+  }
+  spark(arr, w, h) {
+    const max = Math.max.apply(null, arr) || 1, min = Math.min.apply(null, arr);
+    return arr.map((v, i) => (i ? "L" : "M") + (i / (arr.length - 1) * w).toFixed(1) + "," + (h - ((v - min) / (max - min || 1)) * h).toFixed(1)).join(" ");
+  }
+
+  extra() {
+    const D = this.D(), st = this.state, fmt = D.fmtBRL, tq = (st.tq || "").toLowerCase();
+    const F = (arr, keys) => tq ? arr.filter(o => keys.some(k => String(o[k]).toLowerCase().includes(tq))) : arr;
+    const uf = st.uf ? D.byUF[st.uf] : null;
+
+    // ── painel da UF
+    const estado = uf ? {
+      sigla: uf.sigla, nome: uf.nome, regiao: uf.regiao, risco: uf.risco, cor: this.cor(uf.risco), nivel: this.nivel(uf.risco),
+      kpis: [
+        { label: "alertas abertos", value: String(uf.alertas), sub: "últimos 90 dias" },
+        { label: "políticos monitorados", value: uf.politicos.toLocaleString("pt-BR"), sub: "com CPF normalizado" },
+        { label: "empresas ligadas", value: uf.empresas.toLocaleString("pt-BR"), sub: "quadro societário" },
+        { label: "contratos", value: uf.contratos.toLocaleString("pt-BR"), sub: "R$ " + uf.volume.toFixed(1) + " bi" },
+        { label: "doações mapeadas", value: "R$ " + uf.doacoes.toFixed(1) + " mi", sub: "2018–2024" },
+        { label: "cobertura de dados", value: uf.cobertura + "%", sub: "fontes conciliadas" }
+      ],
+      barras: this.bars(uf.tendencia, 640, 90),
+      detectores: (D.DETECTORES || []).map(d => {
+        const v = ((d.id * 29 + uf.codigo * 7) % 90) + 6;
+        return { nome: d.nome, curto: d.curto, v, cor: this.cor(v), open: () => this.go("detectores", { det: d.key }) };
+      }),
+      alertas: (D.ALERTAS || []).filter(a => a.uf === uf.sigla).slice(0, 8).map(a => ({
+        id: a.id, nome: a.detectorNome, politico: a.politico, data: a.data, valor: fmt(a.valor), status: a.status,
+        sev: a.severidade, cor: this.cor(a.severidade), resumo: a.resumo, open: () => this.go("alertas")
+      })),
+      contratos: (D.CONTRATOS || []).filter(c => c.uf === uf.sigla).slice(0, 6).map(c => ({
+        id: c.id, fornecedor: c.fornecedor, orgao: c.orgao, valor: fmt(c.valor), data: c.data, cor: this.cor(c.risco), risco: c.risco
+      })),
+      municipios: Array.from({ length: 8 }, (_, i) => {
+        const v = 94 - i * 9 - (uf.codigo % 6);
+        return { nome: ["Capital", "Serra Alta", "Vila Nova do Norte", "Porto Velho do Sul", "Santa Rita", "Campo Belo", "Riacho Fundo", "Nova Aurora"][i], v, cor: this.cor(v), n: 4 + ((uf.codigo * (i + 3)) % 37) };
+      })
+    } : null;
+
+    // ── alertas
+    const sevOK = a => st.sev === "todos" || (st.sev === "crítico" && a.severidade >= 78) || (st.sev === "atenção" && a.severidade >= 52 && a.severidade < 78) || (st.sev === "baixo" && a.severidade < 52);
+    const alertasAll = (D.ALERTAS || []).filter(a => sevOK(a) && (st.status === "todos" || a.status === st.status));
+    const fila = F(alertasAll, ["id", "politico", "detectorNome", "uf"]).slice(0, 26).map(a => ({
+      id: a.id, nome: a.detectorNome, politico: a.politico, uf: a.uf, data: a.data, valor: fmt(a.valor),
+      status: a.status, sev: a.severidade, cor: this.cor(a.severidade), nivel: this.nivel(a.severidade), resumo: a.resumo,
+      entidade: a.entidade, open: () => this.go("politico", { pol: a.politicoId })
+    }));
+    const matrizPols = (D.POLITICOS || []).slice().sort((a, b) => b.risco - a.risco).slice(0, 14);
+    const matriz = matrizPols.map(p => ({
+      nome: p.nome, uf: p.uf, risco: p.risco, cor: this.cor(p.risco), open: () => this.go("politico", { pol: p.id }),
+      cells: (D.DETECTORES || []).map(d => {
+        const on = p.sinais.indexOf(d.key) >= 0;
+        const v = on ? 30 + ((p.risco * d.id) % 68) : 0;
+        return { key: d.key + p.id, style: "aspect-ratio:1;border:1px solid rgba(255,255,255,.05);background:" + (on ? this.cor(v) : "rgba(255,255,255,.03)") + ";opacity:" + (on ? (0.35 + v / 160).toFixed(2) : "1"), title: d.nome + (on ? " · sinal " + v : " · sem sinal") };
+      })
+    }));
+
+    // ── detectores
+    const detKey = st.det || (D.DETECTORES[0] && D.DETECTORES[0].key);
+    const detSel = (D.DETECTORES || []).find(d => d.key === detKey) || null;
+    const detLista = (D.DETECTORES || []).map((d, i) => {
+      const v = 30 + ((d.id * 37) % 66);
+      return {
+        num: String(i + 1).padStart(2, "0"), nome: d.nome, curto: d.curto, v, cor: this.cor(v), sel: d.key === detKey,
+        style: "all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.06);" + (d.key === detKey ? "background:rgba(255,255,255,.07);box-shadow:inset 2px 0 0 " + this.cor(v) + ";" : ""),
+        open: () => this.setState({ det: d.key })
+      };
+    });
+    const detAl = detSel ? (D.ALERTAS || []).filter(a => a.detector === detSel.key).slice(0, 12).map(a => ({
+      id: a.id, politico: a.politico, uf: a.uf, data: a.data, valor: fmt(a.valor), sev: a.severidade,
+      cor: this.cor(a.severidade), entidade: a.entidade, status: a.status, open: () => this.go("politico", { pol: a.politicoId })
+    })) : [];
+    const detIdx = (D.DETECTORES || []).findIndex(d => d.key === detKey);
+    const detNum = detIdx >= 0 ? String(detIdx + 1).padStart(2, "0") : "—";
+    const detRisco = detSel ? 30 + ((detSel.id * 37) % 66) : 0;
+
+    // ── político
+    const pol = (D.POLITICOS || []).find(p => p.id === st.pol) || (D.POLITICOS || [])[0];
+    const polLista = F((D.POLITICOS || []).slice().sort((a, b) => b.risco - a.risco), ["nome", "uf", "partido"]).slice(0, 40).map(p => ({
+      nome: p.nome, uf: p.uf, partido: p.partido, risco: p.risco, cor: this.cor(p.risco), sel: pol && p.id === pol.id,
+      style: "all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.06);" + (pol && p.id === pol.id ? "background:rgba(255,255,255,.07);box-shadow:inset 2px 0 0 " + this.cor(p.risco) + ";" : ""),
+      open: () => this.setState({ pol: p.id })
+    }));
+    const maxPat = pol ? Math.max.apply(null, pol.patrimonio.map(p => p.valor)) : 1;
+    const perfil = pol ? {
+      nome: pol.nome, cpf: pol.cpf, uf: pol.uf, partido: pol.partido, cargo: pol.cargo, risco: pol.risco,
+      cor: this.cor(pol.risco), nivel: this.nivel(pol.risco), iniciais: pol.nome.split(" ").map(s => s[0]).slice(0, 2).join(""),
+      kpis: [
+        { label: "empresas no quadro", value: String(pol.empresas) },
+        { label: "doações recebidas", value: "R$ " + pol.doacoesRecebidas.toFixed(1) + " mi" },
+        { label: "contratos vinculados", value: String(pol.contratosVinculados) },
+        { label: "processos públicos", value: String(pol.processos) }
+      ],
+      mandatos: pol.mandatos.map(m => ({ ano: String(m.ano), cargo: m.cargo, partido: m.partido, situacao: m.situacao, cor: m.situacao === "Eleito" ? "#4fb286" : m.situacao === "Suplente" ? "#e0a83f" : "rgba(255,255,255,.3)" })),
+      patrimonio: pol.patrimonio.map((p, i, arr) => ({
+        ano: String(p.ano), valor: fmt(p.valor), pct: Math.round(p.valor / maxPat * 100),
+        var: i ? (((p.valor / arr[i - 1].valor - 1) * 100).toFixed(0) + "%") : "—",
+        cor: i && p.valor / arr[i - 1].valor > 1.5 ? "#e0563f" : "rgba(255,255,255,.5)"
+      })),
+      sinais: (D.DETECTORES || []).map(d => ({ nome: d.curto, on: pol.sinais.indexOf(d.key) >= 0, style: "font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.08em;padding:7px 9px;border-radius:2px;border:1px solid " + (pol.sinais.indexOf(d.key) >= 0 ? "rgba(224,86,63,.4);background:rgba(224,86,63,.12);color:#e0563f" : "rgba(255,255,255,.1);color:rgba(255,255,255,.3)") })),
+      doacoes: (D.DOACOES || []).filter(x => x.politicoId === pol.id).slice(0, 5).map(x => ({ doador: x.doador, valor: fmt(x.valor), data: x.data, cor: this.cor(x.risco) })),
+      processos: (D.PROCESSOS || []).filter(x => x.politicoId === pol.id).slice(0, 5).map(x => ({ id: x.id, tribunal: x.tribunal, assunto: x.assunto, fase: x.fase, cor: this.cor(x.risco) }))
+    } : null;
+
+    // ── rede
+    const nodes = (D.NODES || []);
+    const pos = {};
+    const pols = nodes.filter(n => n.tipo === "politico"), emps = nodes.filter(n => n.tipo === "empresa");
+    pols.forEach((n, i) => { const a = (i / pols.length) * Math.PI * 2; pos[n.id] = { x: 500 + Math.cos(a) * 150, y: 330 + Math.sin(a) * 120 }; });
+    emps.forEach((n, i) => { const a = (i / emps.length) * Math.PI * 2 + .18; pos[n.id] = { x: 500 + Math.cos(a) * 330, y: 330 + Math.sin(a) * 250 }; });
+    const redeEdges = (D.EDGES || []).map((e, i) => ({
+      key: "e" + i, x1: (pos[e.source] || {}).x, y1: (pos[e.source] || {}).y, x2: (pos[e.target] || {}).x, y2: (pos[e.target] || {}).y,
+      cor: e.tipo === "sócio" ? "rgba(224,168,63,.42)" : e.tipo === "doação" ? "rgba(79,178,134,.36)" : "rgba(255,255,255,.16)", w: 0.5 + e.peso / 9
+    }));
+    const redeNodes = nodes.map(n => ({
+      key: n.id, x: pos[n.id].x, y: pos[n.id].y, r: n.tipo === "politico" ? 13 : 7, label: n.label.length > 22 ? n.label.slice(0, 21) + "…" : n.label,
+      cor: n.tipo === "politico" ? this.cor(n.risco) : "rgba(255,255,255,.5)",
+      fill: n.tipo === "politico" ? "rgba(8,8,10,.9)" : this.cor(n.risco), tipo: n.tipo,
+      open: () => n.tipo === "politico" ? this.go("politico", { pol: n.id }) : null
+    }));
+
+    // ── tabelas
+    const contratos = F(D.CONTRATOS || [], ["id", "fornecedor", "objeto", "orgao", "uf"]).slice(0, 30).map(c => ({
+      id: c.id, orgao: c.orgao, fornecedor: c.fornecedor, cnpj: c.cnpj, objeto: c.objeto, valor: fmt(c.valor),
+      data: c.data, uf: c.uf, modalidade: c.modalidade, risco: c.risco, cor: this.cor(c.risco), aditivos: String(c.aditivos)
+    }));
+    const doacoes = F(D.DOACOES || [], ["doador", "destino", "partido", "uf"]).slice(0, 30).map(d => ({
+      id: d.id, doador: d.doador, doc: d.doc, destino: d.destino, partido: d.partido, valor: fmt(d.valor),
+      data: d.data, uf: d.uf, risco: d.risco, cor: this.cor(d.risco), teto: d.teto ? "no teto" : "—"
+    }));
+    const processos = F(D.PROCESSOS || [], ["parte", "tribunal", "assunto", "uf"]).slice(0, 30).map(p => ({
+      id: p.id, parte: p.parte, tribunal: p.tribunal, assunto: p.assunto, fase: p.fase, situacao: p.situacao,
+      autuacao: p.autuacao, uf: p.uf, cor: this.cor(p.risco), risco: p.risco
+    }));
+
+    const sevOpts = ["todos", "crítico", "atenção", "baixo"].map(s => ({
+      label: s, style: "all:unset;cursor:pointer;padding:7px 12px;border-radius:2px;font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;border:1px solid " + (st.sev === s ? "rgba(255,255,255,.5);background:rgba(255,255,255,.1);color:#f2f2f0" : "rgba(255,255,255,.1);color:rgba(255,255,255,.42)"),
+      pick: () => this.setState({ sev: s })
+    }));
+    const statusOpts = ["todos", "Novo", "Em análise", "Confirmado", "Arquivado"].map(s => ({
+      label: s, style: "all:unset;cursor:pointer;padding:7px 12px;border-radius:2px;font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;border:1px solid " + (st.status === s ? "rgba(255,255,255,.5);background:rgba(255,255,255,.1);color:#f2f2f0" : "rgba(255,255,255,.1);color:rgba(255,255,255,.42)"),
+      pick: () => this.setState({ status: s })
+    }));
+
+    return {
+      isEstado: st.view === "estado", isAlertas: st.view === "alertas", isDetectores: st.view === "detectores",
+      isPolitico: st.view === "politico", isRede: st.view === "rede", isContratos: st.view === "contratos",
+      isDoacoes: st.view === "doacoes", isProcessos: st.view === "processos",
+      semUF: st.view === "estado" && !uf, estado, fila, matriz, detColunas: (D.DETECTORES || []).map((d, i) => ({ n: String(i + 1).padStart(2, "0"), nome: d.nome })),
+      sevOpts, statusOpts, filaTotal: String(alertasAll.length), verMatriz: this.props.mostrarMatriz !== false,
+      detLista, detSel, detAl, detNum, detRisco, detCor: this.cor(detRisco), detNivel: this.nivel(detRisco),
+      polLista, perfil, redeEdges, redeNodes, contratos, doacoes, processos,
+      tq: st.tq || "", onTQ: (e) => this.setState({ tq: e.target.value }),
+      voltarMapa: () => this.go("mapa")
+    };
+  }
+
+  renderVals() {
+    const D = this.D(), st = this.state, fmt = D.fmtBRL;
+    const rail = st.rail;
+    const criticos = (D.ALERTAS || []).filter(a => a.severidade >= 78).length;
+
+    const navDef = [
+      ["home", "Visão geral", "home"], ["mapa", "Mapa do Brasil", "mapa"], ["estado", "Painel da UF", "estado"],
+      ["alertas", "Alertas", "alertas", criticos], ["detectores", "Detectores", "detect"], ["politico", "Políticos", "pol"],
+      ["rede", "Rede societária", "rede"], ["contratos", "Contratos", "contr"], ["doacoes", "Doações", "doa"], ["processos", "Processos", "proc"]
+    ];
+    const nav = navDef.map(([id, label, ic, badge]) => ({
+      label, icon: this.icon(ic), badge: badge || null,
+      go: () => this.go(id),
+      style: "all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:2px;font:400 12.5px/1 'Space Grotesk',sans-serif;transition:background .18s,color .18s;"
+        + (st.view === id ? "background:rgba(255,255,255,.09);color:#f2f2f0;box-shadow:inset 2px 0 0 #e0a83f;" : "color:rgba(255,255,255,.55);")
+        + (rail ? "" : "justify-content:center;")
+    }));
+
+    const ufSel = st.uf ? D.byUF[st.uf] : null;
+    const crumbMap = { home: "elosys / visão geral", mapa: "elosys / mapa tátil", estado: "elosys / painel da uf", alertas: "elosys / fila de alertas", detectores: "elosys / detectores", politico: "elosys / ficha do político", rede: "elosys / grafo societário", contratos: "elosys / contratos", doacoes: "elosys / doações", processos: "elosys / processos" };
+
+    const q = st.q.trim().toLowerCase();
+    const results = !q ? [] : [
+      ...(D.POLITICOS || []).filter(p => p.nome.toLowerCase().includes(q) || p.cpf.includes(q)).slice(0, 5).map(p => ({ tipo: "político", label: p.nome + " · " + p.partido + "/" + p.uf, meta: "risco " + p.risco, cor: this.cor(p.risco), open: () => this.go("politico", { pol: p.id, q: "" }) })),
+      ...(D.EMPRESAS || []).filter(e => e.nome.toLowerCase().includes(q) || e.cnpj.includes(q)).slice(0, 4).map(e => ({ tipo: "empresa", label: e.nome + " · " + e.cnpj, meta: e.fachada ? "sinal fachada" : "regular", cor: e.fachada ? "#e0563f" : "#9a9a97", open: () => this.go("rede", { q: "" }) })),
+      ...(D.CONTRATOS || []).filter(c => c.fornecedor.toLowerCase().includes(q) || c.objeto.toLowerCase().includes(q)).slice(0, 4).map(c => ({ tipo: "contrato", label: c.id + " · " + c.objeto, meta: fmt(c.valor), cor: this.cor(c.risco), open: () => this.go("contratos", { q: "" }) })),
+      ...(D.UFS || []).filter(u => u.nome.toLowerCase().includes(q) || u.sigla.toLowerCase() === q).slice(0, 3).map(u => ({ tipo: "uf", label: u.nome, meta: "risco " + u.risco, cor: this.cor(u.risco), open: () => { this.setUF(u.sigla); this.go("estado", { q: "" }); } }))
+    ];
+
+    return {
+      ...this.extra(),
+      nav, crumb: crumbMap[st.view] || "elosys",
+      railStyle: "flex:none;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.07);background:#0a0a0c;transition:width .32s cubic-bezier(.65,.02,.2,1);overflow:hidden;width:" + (rail ? "232px" : "70px"),
+      toggleRail: () => this.setState(s => ({ rail: !s.rail })),
+      isHome: st.view === "home", isMapa: st.view === "mapa",
+      goMapa: () => this.go("mapa"), goDetectores: () => this.go("detectores"),
+      goEstado: () => this.go("estado"),
+      clearUF: () => { this.setUF(null); },
+      palette: st.palette, q: st.q, results,
+      openPalette: () => this.setState({ palette: true }),
+      closePalette: () => this.setState({ palette: false }),
+      stop: (e) => e.stopPropagation(),
+      onQuery: (e) => this.setState({ q: e.target.value }),
+
+      heroStats: [
+        { label: "registros indexados", value: "48,2 mi", delta: "+1,4 mi / 30d", tone: "#4fb286" },
+        { label: "CNPJ correlacionados", value: "9,7 mi", delta: "+312 mil / 30d", tone: "#4fb286" },
+        { label: "alertas abertos", value: String((D.ALERTAS || []).length), delta: criticos + " críticos", tone: "#e0563f" },
+        { label: "cobertura territorial", value: "27 UF", delta: "5.570 municípios", tone: "#9a9a97" },
+        { label: "última ingestão", value: "04:12", delta: "TSE · Receita · CGU", tone: "#9a9a97" }
+      ],
+      detCards: (D.DETECTORES || []).map((d, i) => {
+        const risco = 30 + ((d.id * 37) % 66);
+        return { num: String(i + 1).padStart(2, "0"), nome: d.nome, desc: d.desc, fontes: d.fontes, risco, color: this.cor(risco), riscoLabel: this.nivel(risco), open: () => this.go("detectores", { det: d.key }) };
+      }),
+      pipeline: [
+        { n: "01", t: "Ingestão", d: "Coletores agendados por fonte, com versionamento do arquivo bruto e checksum." },
+        { n: "02", t: "Normalização", d: "Chaves canônicas por CPF e CNPJ; deduplicação por similaridade e endereço fiscal." },
+        { n: "03", t: "Correlação", d: "Dez detectores rodando em janela móvel, produzindo arestas de grafo e scores." },
+        { n: "04", t: "Revisão humana", d: "Fila de triagem com estados novo, em análise, confirmado e arquivado." }
+      ],
+      fontes: [
+        { nome: "TSE — consulta_cand, doações, bens", status: "2014–2024", cor: "#4fb286" },
+        { nome: "Receita Federal — CNPJ e sócios", status: "diário", cor: "#4fb286" },
+        { nome: "Portal da Transparência — contratos", status: "diário", cor: "#4fb286" },
+        { nome: "CNJ / DataJud — processos", status: "semanal", cor: "#e0a83f" },
+        { nome: "Diários Oficiais — nomeações", status: "parcial", cor: "#e0a83f" },
+        { nome: "CAGED — vínculos", status: "defasado", cor: "#e0563f" }
+      ],
+
+      noUF: !st.uf, hasUF: !!st.uf, muni: st.muni,
+      ufRank: (D.UFS || []).slice().sort((a, b) => b.risco - a.risco).map(u => ({ sigla: u.sigla, nome: u.nome, risco: u.risco, cor: this.cor(u.risco), pick: () => this.setUF(u.sigla) })),
+      ufSel: ufSel ? {
+        sigla: ufSel.sigla, nome: ufSel.nome, regiao: ufSel.regiao, risco: ufSel.risco, cor: this.cor(ufSel.risco),
+        kpis: [
+          { label: "alertas abertos", value: String(ufSel.alertas) },
+          { label: "políticos", value: ufSel.politicos.toLocaleString("pt-BR") },
+          { label: "contratos", value: ufSel.contratos.toLocaleString("pt-BR") },
+          { label: "volume contratado", value: "R$ " + ufSel.volume.toFixed(1) + " bi" },
+          { label: "doações mapeadas", value: "R$ " + ufSel.doacoes.toFixed(1) + " mi" },
+          { label: "cobertura de dados", value: ufSel.cobertura + "%" }
+        ],
+        alertas: (D.ALERTAS || []).filter(a => a.uf === ufSel.sigla).slice(0, 7).map(a => ({ id: a.id, data: a.data, detectorNome: a.detectorNome, politico: a.politico, valorFmt: fmt(a.valor), cor: this.cor(a.severidade), open: () => this.go("alertas") }))
+      } : null
+    };
+  }
+}
+
+</script>
+</body>
+</html>

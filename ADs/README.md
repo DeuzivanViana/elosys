@@ -19,9 +19,9 @@ Não repúdio aqui significa três garantias:
 | --- | --- | --- |
 | [banco.md](banco.md) | Banco de dados: SQLite (arquivo único), idioma e convenções de tipo | Aceita |
 | [confiabilidade.md](confiabilidade.md) | Proveniência: cadeia `source → collection → parse → record` | Aceita |
-| [politician.md](politician.md) | `politician_history`, `campaign_org` (CNPJ de campanha), CPF mascarado de 2024 | Aceita |
+| [politician.md](politician.md) | `politician_history`, `campaign_org` (CNPJ de campanha), `social_media` (redes declaradas), CPF mascarado de 2024 | Aceita |
 | [imutabilidade.md](imutabilidade.md) | Build reprodutível (rewrite-only) e âncora no git | Aceita |
-| [dados_derivados.md](dados_derivados.md) | Proveniência de correlações e regras de detecção | Proposta |
+| [dados_derivados.md](dados_derivados.md) | Proveniência de correlações e regras de detecção; primeira regra: `disproportionate_expense` | Aceita |
 | [identidade.md](identidade.md) | Tabela mestra `people` e resolução de identidade | Aceita |
 
 ## Formato

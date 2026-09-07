@@ -1,0 +1,9 @@
+{
+  "matched": 533,
+  "no_match": 21759,
+  "ambiguous_dropped": 0,
+  "by_paid_by_self": {
+    "0": 467,
+    "1": 66
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "accounts_crawled_this_run": 817,
+  "by_status": {
+    "error": 10,
+    "empty": 349,
+    "active": 458
+  },
+  "posts_new_this_run": 20103,
+  "total_posts": 59567,
+  "total_accounts_crawled": 1556
+}

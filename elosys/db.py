@@ -25,6 +25,25 @@ def create_schema(path: str | Path) -> None:
     con = sqlite3.connect(str(path))
     try:
         con.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
+        _migrate(con)
         con.commit()
     finally:
         con.close()
+
+
+# Columns added to a table that already existed before this column was
+# introduced -- `CREATE TABLE IF NOT EXISTS` in schema.sql only shapes a
+# BRAND NEW table, so an existing rewrite-only .db needs these applied by
+# hand once. Safe to call every time: each ALTER only runs if the column is
+# still missing.
+_ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "signal": [("amount_cents", "INTEGER"), ("path_length", "INTEGER")],
+}
+
+
+def _migrate(con: sqlite3.Connection) -> None:
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}  # noqa: S608
+        for name, decl in columns:
+            if name not in existing:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")  # noqa: S608

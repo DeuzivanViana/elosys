@@ -131,8 +131,42 @@ def test_staging_table_is_gone_after_build(db, tmp_path):
     con.close()
 
 
-def test_legacy_year_not_implemented(db, tmp_path):
+def test_pre_2018_year_uses_fewer_columns(db, tmp_path, monkeypatch):
+    # 2014/2016 files (as reprocessed and republished by TSE) use the same
+    # header-based layout but carry fewer columns, e.g. no
+    # DS_DETALHE_SITUACAO_CAND. _g() must fall back to None, not crash.
+    header_2014 = (
+        "ANO_ELEICAO;NM_TIPO_ELEICAO;NR_TURNO;SG_UF;SG_UE;NM_UE;DS_CARGO;SQ_CANDIDATO;"
+        "NR_CANDIDATO;NM_CANDIDATO;NM_URNA_CANDIDATO;NR_CPF_CANDIDATO;"
+        "NR_TITULO_ELEITORAL_CANDIDATO;DS_SITUACAO_CANDIDATURA;"
+        "DS_SIT_TOT_TURNO;NR_PARTIDO;SG_PARTIDO;NM_PARTIDO;DT_NASCIMENTO;DS_GENERO;"
+        "DS_GRAU_INSTRUCAO;DS_ESTADO_CIVIL;DS_COR_RACA;DS_OCUPACAO"
+    )
+    row = (
+        "2014;ELEICAO ORDINARIA;1;SP;SP;CIDADE;DEPUTADO FEDERAL;2500001;1234;"
+        f"JOAO DA SILVA;JOAO DA SILVA;{_CPF_A};100000000001;APTO;ELEITO;13;PT;PARTIDO;"
+        "10/05/1980;MASCULINO;SUPERIOR COMPLETO;CASADO(A);BRANCA;ADVOGADO"
+    )
+    csv_txt = (header_2014 + "\n" + row + "\n").encode("latin-1")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("consulta_cand_2014_BRASIL.csv", csv_txt)
+
+    def fake_download(url, dest):
+        Path(dest).write_bytes(buf.getvalue())
+        return 200, "application/zip"
+
+    monkeypatch.setattr(candidates, "download", fake_download)
+
     con = connect(db, write=True)
-    with pytest.raises(NotImplementedError):
-        candidates.ingest_year(con, 2014, tmp_path)
+    candidates.ingest_year(con, 2014, tmp_path)
+    p = candidates.promote(con)
+    assert p["promoted"] == 1
+
+    r = con.execute(
+        "SELECT year, full_name, candidacy_status_detail FROM politician_history"
+    ).fetchone()
+    assert r["year"] == 2014
+    assert r["full_name"] == "JOAO DA SILVA"
+    assert r["candidacy_status_detail"] is None  # column absent in the 2014 file
     con.close()

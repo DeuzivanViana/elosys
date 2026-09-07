@@ -3,13 +3,24 @@
     elosys init-db          --db elosys.db
     elosys tse-candidates   --db elosys.db --years 2018,2020,2022,2024,2026
     elosys tse-accounts     --db elosys.db --years 2018,2020,2022,2024,2026
+    elosys tse-social       --db elosys.db --years 2018,2020,2022,2024,2026
+    elosys tse-assets       --db elosys.db --years 2014,2016,2018,2020,2022,2024,2026
+    elosys transparencia-sanctions --db elosys.db   (CEIS/CNEP; daily snapshot, no --years)
+    elosys receita-cnpj     --db elosys.db --limit 200   (incremental; NOT rewrite-only, see schema.sql)
     elosys manifest         --db elosys.db --out manifest.json
     elosys verify           --db elosys.db      (re-downloads sources, checks hashes)
+    elosys rule-disproportionate-expense --db elosys.db
+    elosys rule-circular-donations --db elosys.db --max-depth 5
+    elosys ai-review --db elosys.db --limit 100   (opcional; precisa de DEEPSEEK_API_KEY)
 
 Each crawler is rewrite-only: it wipes the tables it owns and rebuilds them from
 the public files. Run them in any order; `tse-accounts` links identity better if
 `tse-candidates` ran first. Every run refreshes `manifest.json` and writes a
 `<crawler>_report.json` — commit both.
+
+Detection rules (see ADs/dados_derivados.md) are also rewrite-only: each run
+wipes only ITS OWN past signals and regenerates them from whatever is in the
+tables right now — run a rule again after re-running a crawler it depends on.
 """
 
 from __future__ import annotations
@@ -23,7 +34,17 @@ from . import __version__
 from .db import connect, create_schema
 from .log import get_logger
 from .provenance import verify, write_manifest
-from .tse import accounts, candidates
+from .receita import cnpj as receita_cnpj
+from .rules import (
+    ai_review,
+    candidate_supplier_partner,
+    circular_donations,
+    disproportionate_expense,
+    social_review,
+)
+from .social import x_posts
+from .transparencia import sanctions
+from .tse import accounts, assets, candidates, social
 
 DEFAULT_TMP = "dados_tmp"
 log = get_logger("elosys.cli")
@@ -49,6 +70,129 @@ def _run_crawler(args: argparse.Namespace, module, name: str) -> int:
     report_path.write_text(
         json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
     log.info("wrote %s and refreshed manifest.json — commit both", report_path.name)
+    return 0
+
+
+def _run_sanctions(args: argparse.Namespace) -> int:
+    db = Path(args.db)
+    create_schema(db)
+    con = connect(db, write=True)
+    try:
+        report = sanctions.run(con, tmp_dir=args.tmp)
+        write_manifest(con, db.with_name("manifest.json"))
+    finally:
+        con.close()
+    report_path = db.with_name("transparencia_sanctions_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s and refreshed manifest.json — commit both", report_path.name)
+    return 0
+
+
+def _run_receita_cnpj(args: argparse.Namespace) -> int:
+    db = Path(args.db)
+    create_schema(db)
+    con = connect(db, write=True)
+    try:
+        cnpjs = args.cnpjs.split(",") if args.cnpjs else None
+        report = receita_cnpj.run(con, limit=args.limit, cnpjs=cnpjs, tmp_dir=args.tmp,
+                                  order=args.order, include_campaign=args.include_campaign)
+        write_manifest(con, db.with_name("manifest.json"))
+    finally:
+        con.close()
+    report_path = db.with_name("receita_cnpj_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s and refreshed manifest.json — commit both", report_path.name)
+    return 0
+
+
+def _run_rule(args: argparse.Namespace, module, name: str) -> int:
+    db = Path(args.db)
+    create_schema(db)  # idempotent; adds rule_run/signal/... to an existing db
+    con = connect(db, write=True)
+    try:
+        report = module.run(con)
+    finally:
+        con.close()
+    report_path = db.with_name(f"{name}_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s", report_path.name)
+    return 0
+
+
+def _run_rule_circular_donations(args: argparse.Namespace) -> int:
+    db = Path(args.db)
+    create_schema(db)
+    con = connect(db, write=True)
+    try:
+        report = circular_donations.run(con, max_depth=args.max_depth, max_fanout=args.max_fanout)
+    finally:
+        con.close()
+    report_path = db.with_name("rule_circular_donations_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s", report_path.name)
+    return 0
+
+
+def _run_social_x(args: argparse.Namespace) -> int:
+    db = Path(args.db)
+    create_schema(db)
+    con = connect(db, write=True)
+    try:
+        report = x_posts.run(
+            con, scope=args.scope, limit=args.limit,
+            handles=args.handles.split(",") if args.handles else None,
+            min_weight=args.min_weight, max_items=args.max_items, since=args.since,
+            refresh=args.refresh, batch_size=args.batch_size, workers=args.workers,
+        )
+    finally:
+        con.close()
+    report_path = db.with_name("social_x_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s", report_path.name)
+    return 0
+
+
+def _run_social_review(args: argparse.Namespace) -> int:
+    db = Path(args.db)
+    create_schema(db)
+    con = connect(db, write=True)
+    try:
+        report = social_review.run(
+            con, model=args.model, limit=args.limit, refresh=args.refresh,
+            only_matched=not args.all_posts,
+            handles=args.handles.split(",") if args.handles else None,
+            workers=args.workers,
+        )
+    finally:
+        con.close()
+    report_path = db.with_name("social_review_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s", report_path.name)
+    return 0
+
+
+def _run_ai_review(args: argparse.Namespace) -> int:
+    db = Path(args.db)
+    create_schema(db)
+    con = connect(db, write=True)
+    try:
+        rules = tuple(args.rule.split(",")) if args.rule else ai_review.REVIEWABLE_RULES
+        report = ai_review.run(
+            con, model=args.model, limit=args.limit, rules=rules, refresh=args.refresh,
+            order=args.order, min_amount_cents=round(args.min_amount_brl * 100),
+        )
+    finally:
+        con.close()
+    report_path = db.with_name("ai_review_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s", report_path.name)
     return 0
 
 
@@ -89,12 +233,104 @@ def main(argv: list[str] | None = None) -> int:
     for cmd, mod, name, helptext in (
         ("tse-candidates", candidates, "tse_candidates", "ingest TSE consulta_cand -> politician_history"),
         ("tse-accounts", accounts, "tse_accounts", "ingest TSE prestação de contas -> campaign_org"),
+        ("tse-social", social, "tse_social", "ingest TSE rede_social_candidato -> social_media"),
+        ("tse-assets", assets, "tse_assets", "ingest TSE bem_candidato -> declared_assets"),
     ):
         sp = sub.add_parser(cmd, help=helptext)
         sp.add_argument("--db", default="elosys.db")
         sp.add_argument("--years", help="e.g. 2018,2020,2022,2024,2026 (default: all supported)")
         sp.add_argument("--tmp", default=DEFAULT_TMP, help="temporary download directory")
         sp.set_defaults(func=lambda a, _m=mod, _n=name: _run_crawler(a, _m, _n))
+
+    pc = sub.add_parser("receita-cnpj",
+                        help="incremental CNPJ registry lookup (BrasilAPI) -> company_registry/company_partner")
+    pc.add_argument("--db", default="elosys.db")
+    pc.add_argument("--limit", type=int, default=receita_cnpj.DEFAULT_LIMIT,
+                    help="how many missing companies to fetch this run (default: %(default)s)")
+    pc.add_argument("--order", choices=("money", "id"), default=receita_cnpj.DEFAULT_ORDER,
+                    help="'money' = biggest supplier/donor first (~50s ranking scan); 'id' = insertion order "
+                         "(default: %(default)s)")
+    pc.add_argument("--include-campaign", action="store_true",
+                    help="also enrich campaign-committee CNPJs (natureza 409-4), skipped by default")
+    pc.add_argument("--cnpjs", help="comma-separated CNPJs to fetch instead of the queue")
+    pc.add_argument("--tmp", default=DEFAULT_TMP, help="temporary download directory")
+    pc.set_defaults(func=_run_receita_cnpj)
+
+    ps = sub.add_parser("transparencia-sanctions",
+                        help="ingest CEIS/CNEP (Portal da Transparencia) -> sanction")
+    ps.add_argument("--db", default="elosys.db")
+    ps.add_argument("--tmp", default=DEFAULT_TMP, help="temporary download directory")
+    ps.set_defaults(func=_run_sanctions)
+
+    for cmd, mod, name, helptext in (
+        ("rule-disproportionate-expense", disproportionate_expense, "rule_disproportionate_expense",
+         "flag campaign_expense rows: cheap-sounding item, disproportionate value"),
+    ):
+        sp = sub.add_parser(cmd, help=helptext)
+        sp.add_argument("--db", default="elosys.db")
+        sp.set_defaults(func=lambda a, _m=mod, _n=name: _run_rule(a, _m, _n))
+
+    prc = sub.add_parser("rule-circular-donations",
+                         help="find loops of donations/expenses across the whole database (Tarjan SCC + bounded DFS)")
+    prc.add_argument("--db", default="elosys.db")
+    prc.add_argument("--max-depth", type=int, default=circular_donations.DEFAULT_MAX_DEPTH,
+                     help="max cycle length in hops (default: %(default)s)")
+    prc.add_argument("--max-fanout", type=int, default=circular_donations.DEFAULT_MAX_FANOUT,
+                     help="skip branching through nodes with more edges than this (default: %(default)s)")
+    prc.set_defaults(func=_run_rule_circular_donations)
+
+    pcsp = sub.add_parser(
+        "candidate-supplier-partner",
+        help="candidatos sócios de empresas que receberam pagamento de campanha (match não determinístico)")
+    pcsp.add_argument("--db", default="elosys.db")
+    pcsp.set_defaults(func=lambda a: _run_rule(a, candidate_supplier_partner, "candidate_supplier_partner"))
+
+    par = sub.add_parser("ai-review",
+                         help="LLM (DeepSeek) second opinion on signals: rotineiro vs. bizarro. Needs DEEPSEEK_API_KEY")
+    par.add_argument("--db", default="elosys.db")
+    par.add_argument("--limit", type=int, default=ai_review.DEFAULT_LIMIT,
+                     help="how many signals PER RULE to review this run, biggest-money first (default: %(default)s)")
+    par.add_argument("--rule", help="comma-separated subset of: circular_donations,disproportionate_expense")
+    par.add_argument("--model", default=ai_review.DEFAULT_MODEL, help="DeepSeek model (default: %(default)s)")
+    par.add_argument("--order", choices=("amount", "tight"), default="amount",
+                     help="'amount' = biggest money first; 'tight' = shortest cycles first (default: %(default)s)")
+    par.add_argument("--min-amount-brl", type=float, default=0,
+                     help="skip signals moving less than this many reais (default: 0)")
+    par.add_argument("--refresh", action="store_true", help="re-review signals already reviewed by this model")
+    par.set_defaults(func=_run_ai_review)
+
+    psx = sub.add_parser("social-x",
+                         help="coleta posts/replies do X de contas declaradas ao TSE (Apify). Needs APIFY_TOKEN")
+    psx.add_argument("--db", default="elosys.db")
+    psx.add_argument("--scope", choices=("federal", "deputados", "electeds", "all"), default="federal",
+                     help="quais candidatos (default: %(default)s = eleitos dep. federal/senador)")
+    psx.add_argument("--limit", type=int, help="máximo de contas a coletar nesta execução")
+    psx.add_argument("--handles", help="lista de handles separada por vírgula (ignora --scope)")
+    psx.add_argument("--min-weight", choices=("baixa", "media", "alta"), default=x_posts.DEFAULT_MIN_WEIGHT,
+                     help="peso mínimo dos termos do léxico (default: %(default)s = todos, recall máx.)")
+    psx.add_argument("--max-items", type=int, default=x_posts.DEFAULT_MAX_ITEMS,
+                     help="teto de tweets por conta (default: %(default)s)")
+    psx.add_argument("--since", default=x_posts.DEFAULT_SINCE, help="data mínima YYYY-MM-DD (default: %(default)s)")
+    psx.add_argument("--batch-size", type=int, default=x_posts.DEFAULT_BATCH_SIZE,
+                     help="contas por chamada do ator Apify (default: %(default)s)")
+    psx.add_argument("--workers", type=int, default=x_posts.DEFAULT_WORKERS,
+                     help="chamadas do ator em paralelo (default: %(default)s)")
+    psx.add_argument("--refresh", action="store_true", help="re-coleta contas já visitadas")
+    psx.set_defaults(func=_run_social_x)
+
+    psr = sub.add_parser("social-review",
+                         help="LLM (DeepSeek) classifica posts do X coletados: discurso pejorativo vs. uso legítimo")
+    psr.add_argument("--db", default="elosys.db")
+    psr.add_argument("--limit", type=int, default=social_review.DEFAULT_LIMIT,
+                     help="quantos posts revisar nesta execução (default: %(default)s)")
+    psr.add_argument("--model", default=social_review.DEFAULT_MODEL, help="modelo DeepSeek")
+    psr.add_argument("--workers", type=int, default=social_review.DEFAULT_WORKERS,
+                     help="chamadas DeepSeek em paralelo (default: %(default)s)")
+    psr.add_argument("--all-posts", action="store_true",
+                     help="revisa também posts que não casaram nenhum termo do léxico")
+    psr.add_argument("--handles", help="restringe a estes handles (separados por vírgula)")
+    psr.add_argument("--refresh", action="store_true", help="re-revisa posts já revisados por este modelo")
+    psr.set_defaults(func=_run_social_review)
 
     pm = sub.add_parser("manifest", help="write the input manifest (sources + hashes)")
     pm.add_argument("--db", default="elosys.db")

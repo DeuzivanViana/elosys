@@ -18,3 +18,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# segredos — a chave da DeepSeek (ai-review) vai só por variável de ambiente
+.env
+.env.*

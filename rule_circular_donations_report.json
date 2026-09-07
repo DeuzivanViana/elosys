@@ -1,0 +1,17 @@
+{
+  "rule_run_id": 2,
+  "nodes": 5350221,
+  "edges": 7658959,
+  "sccs_nontrivial": 7892,
+  "cycles_found": 108400,
+  "hub_branches_skipped": 402986,
+  "signals": 108400,
+  "by_severity": {
+    "high": 63556,
+    "medium": 44844
+  },
+  "params": {
+    "max_depth": 5,
+    "max_fanout": 400
+  }
+}

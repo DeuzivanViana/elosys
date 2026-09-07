@@ -3,9 +3,14 @@
 Source: https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_YYYY.zip
 CSV: latin-1 encoding, ';' separator, null sentinels '#NULO#'/'#NE#'/'-N'.
 
-LAYOUT: implemented for 2018+ (header with CD_*/DS_*/NM_* columns).
-2014 and 2016 use the legacy layout (no header, fixed column order) — a
-separate parser, not written yet (see `LEGACY_YEARS`).
+LAYOUT: header with CD_*/DS_*/NM_* columns, for every supported year including
+2014/2016. TSE originally published those two with a legacy header-less layout,
+but has since reprocessed and republished them in the current header format
+(the file we download today has DT_GERACAO stamped years after the election —
+e.g. the 2014 file was regenerated in 2021). 2014 and 2016 simply carry fewer
+columns than 2018+ (no DS_DETALHE_SITUACAO_CAND, no VR_DESPESA_MAX_CAMPANHA,
+...) — `_g()` already tolerates a missing column (-> None), so no separate
+parser is needed. Verified against the live files before enabling them here.
 
 Two phases (rewrite-only build, see ADs/imutabilidade.md):
   1. ingest_year(): download -> record collection -> parse rows into a TEMP
@@ -41,8 +46,7 @@ PARSER_NAME = "tse.candidates"
 PARSER_VERSION = "2.0"  # 2.0: rewrite-only build; TEMP staging; no raw_data
 
 URL_TEMPLATE = "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_{year}.zip"
-SUPPORTED_YEARS = (2018, 2020, 2022, 2024, 2026)
-LEGACY_YEARS = (2014, 2016)
+SUPPORTED_YEARS = (2014, 2016, 2018, 2020, 2022, 2024, 2026)
 
 SOURCE = dict(
     name="TSE - consulta_cand",
@@ -185,10 +189,6 @@ def _csv_members(zf: zipfile.ZipFile) -> list[str]:
 
 def ingest_year(con: sqlite3.Connection, year: int, tmp_dir: str | Path) -> dict:
     """Download one year and stage its rows into the TEMP staging table."""
-    if year in LEGACY_YEARS:
-        raise NotImplementedError(
-            f"{year}: TSE legacy layout (no header) not implemented yet."
-        )
     if year not in SUPPORTED_YEARS:
         raise ValueError(f"unsupported year: {year}")
 

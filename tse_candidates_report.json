@@ -1,0 +1,1368 @@
+{
+  "years": {
+    "2014": {
+      "year": 2014,
+      "collection_id": 16,
+      "already_collected": false,
+      "staged": 26263
+    },
+    "2016": {
+      "year": 2016,
+      "collection_id": 17,
+      "already_collected": false,
+      "staged": 498391
+    },
+    "2018": {
+      "year": 2018,
+      "collection_id": 18,
+      "already_collected": false,
+      "staged": 29287
+    },
+    "2020": {
+      "year": 2020,
+      "collection_id": 19,
+      "already_collected": false,
+      "staged": 558804
+    },
+    "2022": {
+      "year": 2022,
+      "collection_id": 20,
+      "already_collected": false,
+      "staged": 29322
+    },
+    "2024": {
+      "year": 2024,
+      "collection_id": 21,
+      "already_collected": false,
+      "staged": 463845
+    },
+    "2026": {
+      "year": 2026,
+      "collection_id": 22,
+      "already_collected": false,
+      "staged": 20871
+    }
+  },
+  "promote": {
+    "promoted": 1626783,
+    "skipped": 0,
+    "rejected_cpf": 219,
+    "rows_with_cpf_dropped": 425,
+    "rejected_cpf_detail": [
+      {
+        "cpf": "00014862255",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "00267437528",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "00297874241",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "00598811940",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "00864418418",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "00958192405",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "01242222421",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "01257543105",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "01289683204",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "01348611596",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "01437978169",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "01516170822",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "01551430002",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "01662623585",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "01801229163",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "02180964102",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "02282200764",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "02388523184",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "02982985624",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "03034807422",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "03088631519",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "03232814867",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "03386547478",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "03640074190",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "03677420636",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "03847282867",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "04081563926",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "04210036340",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "04214530870",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "04250044220",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "04361803676",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "04420949813",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "04452347410",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "04557447180",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "04899008368",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "05191120400",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "05448110703",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "06027610263",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "07398554680",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "07640902835",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "07772042744",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "07867182772",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "07902936928",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "08557730730",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "09182986444",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "09263388628",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "09786616642",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "10406141673",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "10432763864",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "10591568659",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "10624597253",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "10735374473",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "11062748654",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "11195240597",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "11382710801",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "11538292823",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "11906061785",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "12931070858",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "13082825591",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "13133660802",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "13541163801",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "13725247897",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "13725947104",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "13783157315",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "13859554816",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "14603717806",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "15293795805",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "15313141805",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "15380394353",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "15422615972",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "15445860272",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "15700453215",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "16206690563",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "17210798404",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "18149676805",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "18404630828",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "19142854253",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "20230389953",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "20820550272",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "22062386168",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "22606378504",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "24342327368",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "24947920610",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "26077212881",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "26433044620",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "26608795831",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "26616726568",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "27376796304",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "27953890453",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "27959104387",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "28403622520",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "28688112991",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "28705416000",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "28762614304",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "29007550268",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "30612454053",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "31719775320",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "31941006884",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "32436572291",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "32997787904",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "33528511826",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "33820252720",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "33972206534",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "34061389858",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "34494863572",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "34710337187",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "36458988591",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "37042971604",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "37053361934",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "37192680559",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "37462679515",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "38039753287",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "38310757867",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "38657139553",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "40209113120",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "40915018268",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "40994082215",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "41582780072",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "41774345315",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "42915333220",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "43119255220",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "43212735368",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "43539351515",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "43757812204",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "44075995291",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "44140967404",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "44210131881",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "44282745215",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "45124248300",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "45367736220",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "46018603934",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "46542167404",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "46786228372",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "47395346300",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "47596732534",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "47955619668",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "48083003204",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "48974250187",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "49326171434",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "49915762291",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "51152932420",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "51783894253",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "51801396787",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "52382303115",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "52732266191",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "52872220097",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "54318173615",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "54413206134",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "55105815904",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "55204244204",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "56396414368",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "56707827120",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "57012040300",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "57232490291",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "58308946534",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "59021268272",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "60233770259",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "62077392720",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "62393944320",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "62418750272",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "62732404691",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "62839802520",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "64106594900",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "64616762287",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "64816990534",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "64888347549",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "65146557268",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "67779417549",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "69950490391",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "70046182349",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "70204217334",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "70487790049",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "70578528193",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "70817316515",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "73089435772",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "74631080230",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "75676737204",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "76905209287",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "76968103591",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "77035747753",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "77292537391",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "77303016953",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "77698703991",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "79118313434",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "80211909572",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "80646735187",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "80919723187",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "83179070668",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "84332310730",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "85687243372",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "86331248315",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "86637258920",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "87602318315",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "88092755191",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "88614395949",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "89545753404",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "89985990153",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "90285310178",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "90794761291",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "90972945415",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "90993764053",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "91617278653",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "91789982472",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "92277160334",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "92352618134",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "92741860106",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "92801676349",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "93509448391",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "93534876504",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "94751404334",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "95496289220",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "96743689734",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "96935251249",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "97075388991",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "98229664072",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 2
+      },
+      {
+        "cpf": "98288733620",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "98544454534",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "98656392115",
+        "reason": "voter_id_multiple_cpf",
+        "distinct_voter_ids": 1,
+        "distinct_names": 1
+      },
+      {
+        "cpf": "99518970610",
+        "reason": "multiple_voter_ids",
+        "distinct_voter_ids": 2,
+        "distinct_names": 1
+      }
+    ]
+  }
+}
