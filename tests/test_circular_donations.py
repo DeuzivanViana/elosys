@@ -122,7 +122,7 @@ def test_max_depth_bounds_the_search(tmp_path):
     for i in range(len(cpfs)):
         target_cpf = cpfs[(i + 1) % len(cpfs)]
         target_org = next(oid for c, oid in org_ids if c == target_cpf)
-        _donation(con, target_org, cpfs[i], 1_000_00, f"r{i}")
+        _donation(con, target_org, cpfs[i], 2_000_00, f"r{i}")  # 6 x R$2.000 = R$12.000, above the floor
     con.commit()
 
     rep_default = rule.run(con)
@@ -133,6 +133,29 @@ def test_max_depth_bounds_the_search(tmp_path):
     assert rep_deeper["signals"] == 1
     sig = con.execute("SELECT severity FROM signal").fetchone()
     assert sig["severity"] == "medium"  # 6-hop is past HIGH_SEVERITY_MAX_LEN
+    con.close()
+
+
+def test_skips_cycle_below_min_amount(tmp_path):
+    """Same 2-hop shape as test_finds_two_node_cycle, but the total movement
+    (R$300) is below the default R$1.000 floor -- no signal should be written."""
+    path = tmp_path / "t.db"
+    create_schema(path)
+    con = connect(path, write=True)
+    _seed_source(con)
+    donor_a = "11144477735"
+    _pid_b, org_b = _candidate(con, "22255588846", "CANDIDATA B", "300001")
+    _donation(con, org_b, donor_a, 200_00, "r1")
+    _expense(con, org_b, donor_a, 100_00, "e1")
+    con.commit()
+
+    rep = rule.run(con)
+    assert rep["cycles_found"] == 1
+    assert rep["signals"] == 0
+    assert con.execute("SELECT count(*) FROM signal").fetchone()[0] == 0
+
+    rep_no_floor = rule.run(con, min_amount_cents=0)
+    assert rep_no_floor["signals"] == 1
     con.close()
 
 

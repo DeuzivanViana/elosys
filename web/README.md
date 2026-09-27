@@ -116,8 +116,15 @@ na camada web.
 
 ## Nota sobre `better-sqlite3`
 
-A versão `13.x` tem um prebuild quebrado pra Node 22 no Windows (crash com
-`STATUS_ACCESS_VIOLATION` só de abrir `:memory:`). Por isso o `package.json`
-está fixado em `^11`. Se for atualizar essa dependência, teste
-`node -e "new (require('better-sqlite3'))(':memory:')"` antes de confiar na
-versão nova.
+Fixado em `^13.0.3` (não `^11` como antes). A `11.x` (e qualquer versão < 13)
+usa a API antiga `node::ObjectWrap`; a partir do Node **24.19**, o binding
+antigo dá `SIGABRT` no encerramento do processo — `Assertion failed: (env) !=
+nullptr` dentro de `node::RemoveEnvironmentCleanupHook`, tipicamente logo
+depois da primeira request (o GC finaliza um `Statement` depois que o
+Environment do Node já foi destruído). A `13.x` migrou pra N-API e não tem
+esse problema. Uma versão antiga da `13.x` teve um prebuild quebrado pra Node
+22 no Windows (crash com `STATUS_ACCESS_VIOLATION` só de abrir `:memory:`) —
+parece corrigido na `13.0.3`, mas se for mexer nessa dependência de novo,
+teste sempre `node -e "new (require('better-sqlite3'))(':memory:')"` **e**
+depois `npm run dev` com uso real por um minuto ou dois (o crash do Node 24
+só aparece depois de servir pelo menos uma request, não na abertura).

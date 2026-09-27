@@ -328,16 +328,26 @@ Observações:
   2024 deu); quem quer o CPF da pessoa lê `people.cpf` via `person_id`. Nada de
   editar linha ou `supersedes_id`.
 
-### 5. Foto oficial — fonte futura
+### 5. Foto oficial — `candidate_photo` (elosys/tse/photo_urls.py)
 
-Sem coluna `photo_url` agora. Quando o parser do DivulgaCandContas existir, a foto
-vai numa tabela própria (`person_id` / `year` / `url` / `provenance_id`); a
-`collection` registra `url + accessed_at + sha256` como qualquer outra.
+Implementado, como exceção deliberada — ver o comentário longo em schema.sql
+acima de `candidate_photo`. Curto: o Portal de Dados Abertos só tem as fotos
+empacotadas num zip por (ano, UF), sem URL individual; a API de busca do
+DivulgaCandContas (`GET rest/v1/candidatura/pesquisar?cpf=...`) tem `fotoUrl`
+direto, então o crawler usa essa — busca por CPF (match exato, sem risco de
+homônimo), uma requisição por pessoa cobrindo todos os anos dela de uma vez.
 
-⚠️ **Risco específico da foto:** as URLs do DivulgaCandContas mudam de layout e
-somem entre ciclos — mais frágil que os CSVs do TSE. Candidata natural ao
-"arquivamento seletivo" (arquivo pequeno, não reprodutível). TODO em
-[confiabilidade.md](confiabilidade.md).
+Só a URL fica no banco — nunca a imagem. A web app usa a URL do TSE direto
+como `<img src>`; nada é baixado nem guardado localmente.
+
+⚠️ **Risco aceito conscientemente:** é a mesma API interna que este documento
+originalmente evitava por ser frágil ("muda de layout e some entre ciclos").
+Se `fotoUrl` quebrar, a tabela só para de preencher — nada mais depende dela.
+
+**Cobertura parcial por design:** é uma API de lookup, não um arquivo em lote —
+`run()` é incremental (`--limit`, `--years`, `--workers` para paralelizar via
+thread pool). Cobrir todo mundo é lento (dias), então roda-se aos poucos,
+priorizando por ano de candidatura mais recente.
 
 ## Consequências
 
@@ -363,4 +373,7 @@ somem entre ciclos — mais frágil que os CSVs do TSE. Candidata natural ao
   (`cpf_trusted = 0` + sem match confiante) — ver [identidade.md](identidade.md).
 - ⚠️ **Deflação de valores de bens** (IPCA) é decisão da regra de detecção, não do
   schema — guardamos nominal.
-- Mapear a API interna do DivulgaCandContas para as fotos por ano (item aberto no README).
+- ✅ ~~Mapear a API interna do DivulgaCandContas para as fotos por ano~~ — feito em
+  `elosys/tse/photo_urls.py` (§5): busca por CPF exato, só guarda a URL (hotlink
+  direto do CDN do TSE, sem baixar/armazenar a imagem). Rodado pra 2026: 20.762/
+  20.762 pessoas, 0 erros.

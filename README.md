@@ -201,15 +201,37 @@ As decisões estão em [`ADs/`](ADs/), uma por assunto. Resumo:
 | TSE — `rede_social_candidato` | Redes sociais/site declarados no registro (obrigatório desde a Res. 23.610/2019) | ✅ coletado (2018–2026) |
 | X/Twitter (via Apify) | Posts/replies de contas **declaradas ao TSE**, filtrados por léxico e triados por LLM (`social-x` + `social-review`, ver ADs/dados_derivados.md §1.4) | ✅ eleitos federais |
 | TSE — `bem_candidato` | Bens declarados no registro (base do sinal de patrimônio) | ✅ coletado (2014–2026) |
-| TSE — DivulgaCandContas | Foto oficial por ano, certidões | ⬜ pendente |
+| TSE — `foto_cand` (DivulgaCandContas, busca por CPF) | Foto oficial por candidatura | ✅ coletado (parcial, incremental — ver ADs/politician.md §5) |
+| TSE — DivulgaCandContas | Certidões criminais | ⬜ pendente |
 | Receita Federal (BrasilAPI) | Quadro societário de CNPJ, data de abertura, capital | ✅ coletado (incremental — não é rewrite-only, ver ADs/politician.md §2.3) |
-| CNJ — DataJud | Metadados de processos judiciais públicos | ⬜ pendente |
+| CNJ — DataJud | Metadados de processos judiciais públicos | ⛔ inviável pela API pública — ver nota abaixo |
 | Portal da Transparência — CEIS/CNEP | Empresas/pessoas impedidas de contratar com o governo ou punidas por corrupção | ✅ coletado (snapshot diário) |
 | Portal da Transparência — contratos/emendas | Contratos, convênios, emendas parlamentares | ⬜ pendente |
 | Câmara / Senado — dados abertos | Mandatos em exercício, votações, cota parlamentar (CEAP) | ⬜ pendente |
 
 **Não coletamos** (protegido / sigiloso): endereço residencial, telefone e e-mail
 pessoal de candidatos; antecedentes fora de processo público; relatórios do COAF.
+
+### Por que "quantidade de processos judiciais por candidato" não dá pra fazer (hoje)
+
+Pesquisamos a API Pública do DataJud (CNJ) especificamente pra isso. Conclusão:
+**os documentos que ela devolve não têm nome, CPF nem CNPJ das partes** — só
+metadado processual (`numeroProcesso`, `tribunal`, `classe`, `assuntos`,
+`orgaoJulgador`, `movimentos`, datas). O glossário oficial da API
+([datajud-wiki.cnj.jus.br/api-publica/glossario](https://datajud-wiki.cnj.jus.br/api-publica/glossario/))
+não lista nenhum campo de parte — é proposital, por sigilo (Portaria CNJ
+160/2020). Sem CPF/nome no índice, **não dá pra buscar "todos os processos do
+candidato X"** por essa API; ela só serve se você já sabe o número do
+processo, ou quer estatística agregada (quantos processos por classe/tribunal
+no geral), não "quantos processos tem essa pessoa".
+
+A alternativa real seria raspar a consulta processual pública de cada tribunal
+(TJ/TRF/TRT etc.) individualmente por nome — 90+ tribunais, sem padrão comum de
+resposta, boa parte também mascara ou omite nome em processos sigilosos, e é
+exatamente o tipo de fonte "não reprodutível" que já discutimos em
+[`ADs/confiabilidade.md`](ADs/confiabilidade.md) §2. Não está no radar de
+próximos passos por isso — é trabalho de raspagem massivo pra um retorno
+incerto, não uma tarde de crawler.
 
 ## Premissa legal e ética
 
@@ -221,15 +243,31 @@ pessoal de candidatos; antecedentes fora de processo público; relatórios do CO
 
 ## Próximos passos
 
-1. Rodar `receita-cnpj` em lotes até cobrir os fornecedores que importam. A
-   fila agora prioriza por dinheiro recebido/doado (`--order money`, padrão);
-   ~15,7% do R$ pago a fornecedores CNPJ já tem data de fundação, mas só ~140
-   empresas — é rate-limited (1 request por CNPJ). A fonte definitiva seria o
-   dump de dados abertos de CNPJ da Receita (todas as empresas de uma vez).
+1. Continuar rodando `receita-cnpj` em lotes (atualizado em 2026-09-23 — os
+   números abaixo mudam a cada rodada, conferir com as queries em
+   `elosys.db` antes de citar de novo). A fila prioriza por dinheiro
+   recebido/doado (`--order money`, padrão), então a cobertura em **R$ já
+   está bem mais alta que em CNPJs**: **18.628** CNPJs enriquecidos
+   (`company_registry`) de **382.595** fornecedores distintos (~4,9% em
+   contagem) cobrem **70,8% do valor total pago a fornecedores CNPJ** (R$
+   7,15 bi de R$ 10,10 bi). Sobra uma cauda longa de ~366 mil CNPJs de baixo
+   valor individual — é rate-limited (1 request por CNPJ), então cada lote
+   fecha a lacuna que resta em R$ mais devagar que em contagem. A fonte
+   definitiva seria o dump de dados abertos de CNPJ da Receita (todas as
+   empresas de uma vez, sem rate limit).
 2. Guardar os `.zip` do TSE num store por hash (mitiga perda de valor se a fonte
    republicar um arquivo alterado).
 3. `disproportionate_expense` v2: outlier estatístico por categoria de despesa
    (mediana), além do léxico fixo de palavras-chave.
-4. Regra de doação circular (A doa pra B, B doa pra A, ou por interpostas pessoas).
+4. **Teto de gastos de campanha (limite legal) por candidatura.** Hoje a ficha
+   do candidato já compara **recebido em doações × despesas contratadas ×
+   pago** (`getPersonProfile().finance`, ver `web/src/lib/queries.ts` e os
+   KPIs em `/politico/[id]`) — isso já está pronto. O que falta é o **teto
+   oficial do TSE** (valor máximo que a lei permite gastar naquela
+   candidatura/cargo/UF) pra comparar "quanto gastou" contra "quanto podia
+   gastar", não só contra "quanto arrecadou". O TSE publica esse limite
+   separadamente (fora do `consulta_cand` e da prestação de contas já
+   coletados) — precisa de um crawler novo (`elosys/tse/*.py`) pra achar e
+   parsear esse arquivo antes de dar pra prometer o dado.
 5. Regra "fornecedor/doador sancionado" — cruzar `sanction` × `campaign_donation`/
    `campaign_expense` (já sabemos que bate: 474 empresas sancionadas em comum).

@@ -102,12 +102,18 @@ deles, só registra que ficaram de fora.
 Rodada contra a base real: grafo de **5.350.221 nós / 7.658.959 arestas**
 (a partir de ~5M doações + ~8M despesas), Tarjan em 12s, **108.400 ciclos**
 encontrados em 10.5s de enumeração (402.986 ramificações por nó-hub
-puladas). Severidade: `high` se o ciclo tem até 3 nós, `medium` acima disso
-— **63.556 high, 44.844 medium**. Escrever os sinais (uma consulta de nomes
-+ atores + evidência por ciclo) foi a parte mais lenta: ~22 minutos pra
-108.400 sinais, já que cada um bate no banco várias vezes; ficou registrado
-como ponto de otimização futura (ver Pontos em aberto) mas não bloqueou o
-resultado.
+puladas). Severidade: `high` se o ciclo tem até 3 nós, `medium` acima disso.
+Escrever os sinais (uma consulta de nomes + atores + evidência por ciclo)
+foi a parte mais lenta: ~22 minutos pra 108.400 sinais, já que cada um bate
+no banco várias vezes; ficou registrado como ponto de otimização futura (ver
+Pontos em aberto) mas não bloqueou o resultado.
+
+`v1.1` adicionou um piso `min_amount_cents` (default R$ 1.000,00) direto na
+regra: um ciclo cujo `total_amount` fica abaixo do piso não gera sinal
+nenhum (nem bate no banco). Rodando de novo contra a base real: dos mesmos
+108.400 ciclos, **9.658 ficaram abaixo do piso** e foram descartados —
+**98.742 sinais gerados** (54.714 `high`, 44.028 `medium`), ~8,9% a menos
+que antes, sem perder nenhum ciclo que já fosse relevante por valor.
 
 Interface: `/sinais/doacao-circular` no app web lista os sinais (filtro por
 severidade, **ordenável por severidade/valor movimentado/tamanho do
@@ -242,10 +248,10 @@ até as fontes.
 - ⚠️ `disproportionate_expense` v2: outlier estatístico por `DS_ORIGEM_DESPESA`
   (mediana da categoria) além do léxico de palavras-chave fixo — pega desproporção
   fora da lista de itens baratos, não só "caneta cara".
-- ⚠️ `circular_donations` v2: 108.400 sinais é muito volume pra ser útil sem mais
-  filtro — a página web já deixa ordenar por valor/tamanho (ver §1.2), mas um piso
-  mínimo de valor NA REGRA (não só na UI) ainda falta, pra não gerar sinal nenhum
-  pra ciclos de R$ 20.
+- ✅ ~~`circular_donations` v2: piso mínimo de valor NA REGRA~~ — `v1.1` adicionou
+  `min_amount_cents` (default R$ 1.000,00, `--min-amount-brl` pra ajustar); um
+  ciclo abaixo do piso não gera sinal nenhum, nem bate no banco. 108.400 → 98.742
+  sinais na base real (ver §1.2).
 - ✅ ~~`circular_donations`: escrita lenta~~ — cache de nomes/atores/evidência por
   todo o write phase (não só por ciclo) levou de ~22 min pra **~13,5 min** pros
   mesmos 108.400 sinais. Ainda mais lento que construir o grafo (~2 min) — o

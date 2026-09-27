@@ -184,6 +184,10 @@ CREATE INDEX IF NOT EXISTS ix_campaign_donation_candidacy  ON campaign_donation 
 CREATE INDEX IF NOT EXISTS ix_campaign_donation_donor_doc  ON campaign_donation (donor_cpf_cnpj);
 CREATE INDEX IF NOT EXISTS ix_campaign_donation_donor_person ON campaign_donation (donor_person_id) WHERE donor_person_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_campaign_donation_donor_company ON campaign_donation (donor_company_id) WHERE donor_company_id IS NOT NULL;
+-- Search by name needs to reach individual (pessoa física) donors too, not
+-- just the `people`/candidate table — this is what makes that possible
+-- without a full scan of 5M+ rows on every keystroke.
+CREATE INDEX IF NOT EXISTS ix_campaign_donation_donor_name ON campaign_donation (donor_name) WHERE donor_company_id IS NULL;
 
 -- Every expense a campaign CNPJ contracted (despesas_contratadas_candidatos_*.csv
 -- -- the accrual side; despesas_pagas, when it's actually paid, is not loaded
@@ -223,12 +227,39 @@ CREATE INDEX IF NOT EXISTS ix_campaign_expense_candidacy  ON campaign_expense (y
 CREATE INDEX IF NOT EXISTS ix_campaign_expense_supplier_doc ON campaign_expense (supplier_cpf_cnpj);
 CREATE INDEX IF NOT EXISTS ix_campaign_expense_supplier_person ON campaign_expense (supplier_person_id) WHERE supplier_person_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_campaign_expense_supplier_company ON campaign_expense (supplier_company_id) WHERE supplier_company_id IS NOT NULL;
+-- Same reasoning as ix_campaign_donation_donor_name: lets name search reach
+-- individual (pessoa física) suppliers too.
+CREATE INDEX IF NOT EXISTS ix_campaign_expense_supplier_name ON campaign_expense (supplier_name) WHERE supplier_company_id IS NULL;
 -- Supports the web app's "empresas que mais faturaram" ranking (GROUP BY
 -- supplier, optionally filtered by year) without a full scan of every row.
 CREATE INDEX IF NOT EXISTS ix_campaign_expense_supplier_rank
     ON campaign_expense (supplier_cpf_cnpj) WHERE supplier_company_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_campaign_expense_supplier_rank_year
     ON campaign_expense (year, supplier_cpf_cnpj) WHERE supplier_company_id IS NOT NULL;
+
+-- Derived, not a source table: a name-searchable index over every pessoa
+-- física (CPF, not company) who shows up as a donor or a supplier but was
+-- never a candidate, so never got a `people` row (see the donor identity
+-- policy note above campaign_donation). Backs the web app's "buscar por
+-- nome" surfacing these people labeled "pessoa física", not just
+-- candidates. A plain `LIKE '%name%'` scan across the ~14M donation/expense
+-- rows took 100s+ per keystroke; FTS5 does the same lookup in low
+-- single-digit ms. Rebuild after every accounts.py ingest:
+--   DELETE FROM pessoa_fisica_search;
+--   INSERT INTO pessoa_fisica_search (cpf, name)
+--   SELECT cpf, max(name) FROM (
+--     SELECT donor_cpf_cnpj AS cpf, donor_name AS name FROM campaign_donation
+--       WHERE donor_company_id IS NULL AND donor_cpf_cnpj IS NOT NULL
+--         AND length(donor_cpf_cnpj) = 11 AND donor_name IS NOT NULL
+--     UNION ALL
+--     SELECT supplier_cpf_cnpj AS cpf, supplier_name AS name FROM campaign_expense
+--       WHERE supplier_company_id IS NULL AND supplier_cpf_cnpj IS NOT NULL
+--         AND length(supplier_cpf_cnpj) = 11 AND supplier_name IS NOT NULL
+--   ) GROUP BY cpf;
+-- `cpf` itself is UNINDEXED here (not searchable via MATCH, only stored) --
+-- a CPF-prefix search instead uses donor_cpf_cnpj/supplier_cpf_cnpj's own
+-- plain indexes directly, which are already fast for a `LIKE 'prefix%'`.
+CREATE VIRTUAL TABLE IF NOT EXISTS pessoa_fisica_search USING fts5(cpf UNINDEXED, name);
 
 -- Cash-basis side of an expense: when it was actually paid, possibly in
 -- installments (despesas_pagas_candidatos_*.csv). This file carries no CNPJ,
@@ -460,6 +491,73 @@ CREATE INDEX IF NOT EXISTS ix_sanction_company ON sanction (company_id) WHERE co
 CREATE INDEX IF NOT EXISTS ix_sanction_person ON sanction (person_id) WHERE person_id IS NOT NULL;
 
 -- ------------------------------------------------------------------
+-- DATA: parliamentary earmarks (emendas parlamentares) — Portal da Transparência
+-- Crawler: elosys/transparencia/earmarks.py  (source 'Portal da Transparencia - Emendas Parlamentares')
+--
+-- Same "current-state single file" shape as sanction above, but here the
+-- single file covers the WHOLE history (2014-today) in one shot, so this
+-- is rewrite-only like every TSE crawler, not an incremental cache.
+--
+-- Two files, two tables. `parliamentary_earmark` is one row per emenda:
+-- who authored it (a deputado/senador) and how much moved. `author_person_id`
+-- is a NAME match against politician_history (DEPUTADO FEDERAL/SENADOR) --
+-- the source has no CPF for the author, so per ADs/identidade.md this is
+-- never treated as a confirmed identity: `author_match_basis` records how
+-- (or whether) it matched, same spirit as candidate_supplier_partner's
+-- `match_basis`, and nothing here ever writes to `people`.
+--
+-- `parliamentary_earmark_beneficiary` is one row per (emenda, beneficiary,
+-- month): who actually received the money. `beneficiary_company_id` is a
+-- deterministic CNPJ match against `companies` (no ambiguity risk, unlike
+-- the author name match) -- this is what lets a query ask "did a company
+-- that donated to/supplied a campaign also cash a parliamentary earmark".
+-- ------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS parliamentary_earmark (
+    id                 INTEGER PRIMARY KEY,
+    earmark_code       TEXT NOT NULL,        -- Código da Emenda
+    year               INTEGER NOT NULL,     -- Ano da Emenda
+    earmark_type       TEXT,                 -- Tipo de Emenda
+    author_code        TEXT,                 -- Código do Autor da Emenda (source's own id, not ours)
+    author_name        TEXT,                 -- Nome do Autor da Emenda, as published
+    author_person_id   INTEGER REFERENCES people(id),  -- name match only; see comment above
+    author_match_basis TEXT,                 -- 'nome_deputado_federal' | 'nome_senador' | NULL (no match)
+    locality           TEXT,                 -- Localidade de aplicação do recurso
+    state              TEXT,                 -- UF
+    municipality        TEXT,
+    function_name         TEXT,              -- Nome Função
+    subfunction_name         TEXT,           -- Nome Subfunção
+    program_name                TEXT,        -- Nome Programa
+    action_name                    TEXT,     -- Nome Ação
+    committed_cents      INTEGER,            -- Valor Empenhado
+    paid_cents             INTEGER,          -- Valor Pago
+    provenance_id            INTEGER NOT NULL REFERENCES parse(id),
+    collected_at                TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_parliamentary_earmark ON parliamentary_earmark (earmark_code, year, locality);
+CREATE INDEX IF NOT EXISTS ix_parliamentary_earmark_author
+    ON parliamentary_earmark (author_person_id) WHERE author_person_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS parliamentary_earmark_beneficiary (
+    id                    INTEGER PRIMARY KEY,
+    earmark_code          TEXT NOT NULL,     -- Código da Emenda (joins parliamentary_earmark.earmark_code)
+    author_code           TEXT,              -- Código do Autor da Emenda, kept for convenience
+    year_month            TEXT,              -- Ano/Mês, as published ('202609')
+    beneficiary_doc       TEXT NOT NULL,     -- Código do Favorecido, digits only (11 CPF or 14 CNPJ)
+    beneficiary_name      TEXT,
+    beneficiary_type      TEXT,              -- Tipo Favorecido ('Pessoa Física' | 'Pessoa Jurídica')
+    beneficiary_company_id INTEGER REFERENCES companies(id),  -- deterministic CNPJ match
+    state                 TEXT,              -- UF Favorecido
+    municipality          TEXT,              -- Município Favorecido
+    amount_cents          INTEGER NOT NULL,  -- Valor Recebido
+    provenance_id         INTEGER NOT NULL REFERENCES parse(id),
+    collected_at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_earmark_beneficiary_code ON parliamentary_earmark_beneficiary (earmark_code);
+CREATE INDEX IF NOT EXISTS ix_earmark_beneficiary_company
+    ON parliamentary_earmark_beneficiary (beneficiary_company_id) WHERE beneficiary_company_id IS NOT NULL;
+
+-- ------------------------------------------------------------------
 -- DATA: declared assets — bem_candidato (see ADs/politician.md §3)
 -- Crawler: elosys/tse/assets.py  (source 'TSE - bem_candidato')
 -- One row per asset declared at candidacy registration. No CPF in this file
@@ -485,6 +583,45 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_declared_assets
     ON declared_assets (year, tse_candidacy_id, asset_order);
 CREATE INDEX IF NOT EXISTS ix_declared_assets_person  ON declared_assets (person_id) WHERE person_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_declared_assets_history ON declared_assets (history_id) WHERE history_id IS NOT NULL;
+
+-- ------------------------------------------------------------------
+-- DATA: candidate photo URLs (see ADs/politician.md §5)
+-- Crawler: elosys/tse/photo_urls.py  (source 'TSE - DivulgaCandContas fotoUrl')
+--
+-- NOT rewrite-only, same shape as company_registry below: an explicit,
+-- deliberate exception. There is no bulk structured file for this one --
+-- TSE's open data portal only ships photos as one big zip per (year, UF),
+-- with no per-candidate URL inside it. DivulgaCandContas (the candidate-
+-- facing SPA) DOES expose one via its internal search API
+-- (`GET rest/v1/candidatura/pesquisar?cpf=...`), which is what this
+-- crawler calls -- one request per PERSON, by CPF (exact match, no
+-- homonym risk), covering every year of theirs in one response, not per
+-- candidacy. This is the exact API ADs/politician.md §5 originally
+-- flagged as fragile ("muda de layout e some entre ciclos") and avoided
+-- in favor of the open data portal for every other photo attempt -- kept
+-- here anyway, by explicit choice, only for this one field. If `fotoUrl`
+-- ever breaks, this table just stops filling in further; nothing else in
+-- the schema depends on it.
+--
+-- Only the URL STRING is stored, never the image itself -- the web app
+-- hotlinks `photo_url` directly as an <img src>, so the photo is served by
+-- the TSE CDN at view time, not by us. That also means a broken/renamed
+-- URL down the line silently 404s in the browser rather than failing a
+-- build here.
+-- ------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS candidate_photo (
+    id                INTEGER PRIMARY KEY,
+    person_id         INTEGER REFERENCES people(id),             -- via tse_candidacy_id; NULL if unmatched
+    history_id        INTEGER REFERENCES politician_history(id), -- the (year, candidacy) row, if found
+    tse_candidacy_id  TEXT NOT NULL,      -- SQ_CANDIDATO
+    year              INTEGER NOT NULL,
+    photo_url         TEXT NOT NULL,      -- fotoUrl, as returned by the search API
+    provenance_id     INTEGER NOT NULL REFERENCES parse(id),
+    collected_at      TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_candidate_photo ON candidate_photo (year, tse_candidacy_id);
+CREATE INDEX IF NOT EXISTS ix_candidate_photo_person ON candidate_photo (person_id) WHERE person_id IS NOT NULL;
 
 -- ------------------------------------------------------------------
 -- DATA: CNPJ registry enrichment — Receita Federal, via BrasilAPI

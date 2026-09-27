@@ -6,7 +6,9 @@
     elosys tse-social       --db elosys.db --years 2018,2020,2022,2024,2026
     elosys tse-assets       --db elosys.db --years 2014,2016,2018,2020,2022,2024,2026
     elosys transparencia-sanctions --db elosys.db   (CEIS/CNEP; daily snapshot, no --years)
+    elosys transparencia-earmarks --db elosys.db   (Emendas Parlamentares; arquivo unico, todo o historico)
     elosys receita-cnpj     --db elosys.db --limit 200   (incremental; NOT rewrite-only, see schema.sql)
+    elosys tse-photo-urls   --db elosys.db --limit 500   (incremental; NOT rewrite-only, see schema.sql)
     elosys manifest         --db elosys.db --out manifest.json
     elosys verify           --db elosys.db      (re-downloads sources, checks hashes)
     elosys rule-disproportionate-expense --db elosys.db
@@ -43,8 +45,8 @@ from .rules import (
     social_review,
 )
 from .social import x_posts
-from .transparencia import sanctions
-from .tse import accounts, assets, candidates, social
+from .transparencia import earmarks, sanctions
+from .tse import accounts, assets, candidates, photo_urls, social
 
 DEFAULT_TMP = "dados_tmp"
 log = get_logger("elosys.cli")
@@ -107,6 +109,41 @@ def _run_receita_cnpj(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_earmarks(args: argparse.Namespace) -> int:
+    db = Path(args.db)
+    create_schema(db)
+    con = connect(db, write=True)
+    try:
+        report = earmarks.run(con, tmp_dir=args.tmp)
+        write_manifest(con, db.with_name("manifest.json"))
+    finally:
+        con.close()
+    report_path = db.with_name("transparencia_earmarks_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s and refreshed manifest.json — commit both", report_path.name)
+    return 0
+
+
+def _run_photo_urls(args: argparse.Namespace) -> int:
+    db = Path(args.db)
+    create_schema(db)
+    con = connect(db, write=True)
+    try:
+        person_ids = [int(p) for p in args.person_ids.split(",")] if args.person_ids else None
+        years = [int(y) for y in args.years.split(",")] if args.years else None
+        report = photo_urls.run(con, limit=args.limit, person_ids=person_ids, years=years,
+                                tmp_dir=args.tmp, workers=args.workers)
+        write_manifest(con, db.with_name("manifest.json"))
+    finally:
+        con.close()
+    report_path = db.with_name("tse_photo_urls_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    log.info("wrote %s and refreshed manifest.json — commit both", report_path.name)
+    return 0
+
+
 def _run_rule(args: argparse.Namespace, module, name: str) -> int:
     db = Path(args.db)
     create_schema(db)  # idempotent; adds rule_run/signal/... to an existing db
@@ -127,7 +164,8 @@ def _run_rule_circular_donations(args: argparse.Namespace) -> int:
     create_schema(db)
     con = connect(db, write=True)
     try:
-        report = circular_donations.run(con, max_depth=args.max_depth, max_fanout=args.max_fanout)
+        report = circular_donations.run(con, max_depth=args.max_depth, max_fanout=args.max_fanout,
+                                        min_amount_cents=round(args.min_amount_brl * 100))
     finally:
         con.close()
     report_path = db.with_name("rule_circular_donations_report.json")
@@ -256,11 +294,31 @@ def main(argv: list[str] | None = None) -> int:
     pc.add_argument("--tmp", default=DEFAULT_TMP, help="temporary download directory")
     pc.set_defaults(func=_run_receita_cnpj)
 
+    pf = sub.add_parser("tse-photo-urls",
+                        help="incremental DivulgaCandContas fotoUrl lookup -> candidate_photo")
+    pf.add_argument("--db", default="elosys.db")
+    pf.add_argument("--limit", type=int, default=photo_urls.DEFAULT_LIMIT,
+                    help="how many people (missing a lookup) to check this run (default: %(default)s)")
+    pf.add_argument("--person-ids", help="comma-separated person ids to fetch instead of the queue")
+    pf.add_argument("--years", help="comma-separated years to scope the queue to (e.g. 2026)")
+    pf.add_argument("--workers", type=int, default=photo_urls.DEFAULT_WORKERS,
+                    help="concurrent requests (I/O-bound thread pool). Higher = faster but risks the "
+                         "source's bot filter blocking the IP -- raise carefully (default: %(default)s)")
+    pf.add_argument("--tmp", default=DEFAULT_TMP, help="temporary download directory")
+    pf.set_defaults(func=_run_photo_urls)
+
     ps = sub.add_parser("transparencia-sanctions",
                         help="ingest CEIS/CNEP (Portal da Transparencia) -> sanction")
     ps.add_argument("--db", default="elosys.db")
     ps.add_argument("--tmp", default=DEFAULT_TMP, help="temporary download directory")
     ps.set_defaults(func=_run_sanctions)
+
+    pe = sub.add_parser("transparencia-earmarks",
+                        help="ingest Emendas Parlamentares (Portal da Transparencia) -> "
+                             "parliamentary_earmark(_beneficiary)")
+    pe.add_argument("--db", default="elosys.db")
+    pe.add_argument("--tmp", default=DEFAULT_TMP, help="temporary download directory")
+    pe.set_defaults(func=_run_earmarks)
 
     for cmd, mod, name, helptext in (
         ("rule-disproportionate-expense", disproportionate_expense, "rule_disproportionate_expense",
@@ -277,6 +335,9 @@ def main(argv: list[str] | None = None) -> int:
                      help="max cycle length in hops (default: %(default)s)")
     prc.add_argument("--max-fanout", type=int, default=circular_donations.DEFAULT_MAX_FANOUT,
                      help="skip branching through nodes with more edges than this (default: %(default)s)")
+    prc.add_argument("--min-amount-brl", type=float,
+                     default=circular_donations.DEFAULT_MIN_AMOUNT_CENTS / 100,
+                     help="skip a cycle whose total movement is below this many reais (default: %(default)s)")
     prc.set_defaults(func=_run_rule_circular_donations)
 
     pcsp = sub.add_parser(

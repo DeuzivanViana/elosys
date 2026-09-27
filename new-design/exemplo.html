@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>EloSys — kit de componentes</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div style="padding:20px 20px 16px;display:flex;align-items:center;gap:9px">
+      <span style="width:22px;height:22px;border-radius:6px;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">E</span>
+      <span style="font-size:15px;font-weight:600">EloSys</span>
+      <span class="mono" style="margin-left:auto;font-size:10px;color:var(--muted-2)">v0.9</span>
+    </div>
+
+    <div style="padding:0 14px 14px">
+      <div class="input"><span class="mono" style="color:var(--muted-2)">&#8981;</span>Buscar<span class="input__kbd">&#8984;K</span></div>
+    </div>
+
+    <div class="sidebar__group"><span class="label">Favoritos</span></div>
+    <div class="sidebar__items">
+      <button class="navitem is-active">Adriano V. Pe&ccedil;anha <span class="navitem__remove">&times;</span></button>
+      <button class="navitem">Gr&aacute;fica Meridiano Ltda <span class="navitem__remove">&times;</span></button>
+    </div>
+
+    <div class="sidebar__group"><span class="label">Sinais</span></div>
+    <div class="sidebar__items">
+      <button class="navitem">Doa&ccedil;&atilde;o circular <span class="navitem__count navitem__count--alert">218</span></button>
+      <button class="navitem">An&aacute;lise de IA <span class="navitem__count">3.911</span></button>
+      <button class="navitem">Discurso em rede social <span class="navitem__count">874</span></button>
+    </div>
+
+    <div style="margin-top:auto;padding:16px 20px;border-top:1px solid var(--border);font-size:12px;line-height:1.55;color:var(--muted-2)">
+      Ind&iacute;cio n&atilde;o &eacute; prova. Nenhum dado aqui &eacute; acusa&ccedil;&atilde;o.
+    </div>
+  </aside>
+
+  <main class="content">
+    <div class="topbar">
+      <span class="crumb">Consulta</span>
+      <span class="crumb crumb__sep">/</span>
+      <span class="crumb__current">Adriano V. Pe&ccedil;anha</span>
+      <span style="margin-left:auto;display:flex;gap:10px">
+        <button class="btn btn--fav is-on">&#9733; Favoritado</button>
+        <button class="btn">Exportar</button>
+      </span>
+    </div>
+
+    <div class="content__inner" style="display:flex;flex-direction:column;gap:28px">
+
+      <section class="kpis">
+        <div class="kpi"><div class="kpi__label">Recebido</div><div class="kpi__value kpi__value--green">R$ 2.842.100</div><div class="kpi__sub">318 doa&ccedil;&otilde;es</div></div>
+        <div class="kpi"><div class="kpi__label">Contratado</div><div class="kpi__value">R$ 2.611.480</div><div class="kpi__sub">204 despesas</div></div>
+        <div class="kpi"><div class="kpi__label">Pago</div><div class="kpi__value">R$ 2.554.020</div><div class="kpi__sub">97,8% liquidado</div></div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:14px">
+        <span class="label">Sinais de alerta</span>
+
+        <article class="signal signal--high">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="badge badge--red">High</span>
+            <span class="mono" style="font-size:12px;color:var(--muted-2)">doacao_circular</span>
+            <span class="badge badge--red">IA &middot; bizarro</span>
+            <span class="num" style="margin-left:auto;font-size:17px">R$ 228.000,00</span>
+          </div>
+          <p style="font-size:14.5px;color:var(--fg-2);line-height:1.65;margin:12px 0 0">
+            Recebeu R$ 132.000 de J&uacute;lio H. Bandeira em 12/08/2022 e devolveu R$ 96.000 em 29/08/2022.
+          </p>
+          <div style="display:flex;gap:12px;margin-top:16px">
+            <button class="btn btn--primary">Ver no grafo</button>
+            <button class="btn">Fatos citados pela IA (4)</button>
+          </div>
+        </article>
+
+        <article class="signal signal--medium">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="badge badge--accent">Medium</span>
+            <span class="mono" style="font-size:12px;color:var(--muted-2)">socio_fornecedor</span>
+            <span class="badge">IA &middot; inconclusivo</span>
+            <span class="num" style="margin-left:auto;font-size:17px">R$ 604.220,00</span>
+          </div>
+          <p style="font-size:14.5px;color:var(--fg-2);line-height:1.65;margin:12px 0 0">
+            Hom&ocirc;nimo do candidato consta como s&oacute;cio-administrador de fornecedor da campanha.
+          </p>
+          <div class="signal__note">
+            <span class="mono" style="font-size:11px;color:var(--red)">Aten&ccedil;&atilde;o</span>
+            Correspond&ecirc;ncia N&Atilde;O confirmada &mdash; o quadro societ&aacute;rio traz apenas nome, sem CPF completo.
+          </div>
+        </article>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:14px">
+        <span class="label">Doa&ccedil;&otilde;es recebidas</span>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Nome</th><th>Data</th><th>Ano</th>
+              <th aria-sort="descending" style="text-align:right">Valor &darr;</th>
+              <th style="text-align:right">Pago</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Diret&oacute;rio Nacional PRT</td>
+              <td class="mono" style="font-size:13px;color:var(--muted)">02/09/2022</td>
+              <td class="mono" style="font-size:13px;color:var(--muted)">2022</td>
+              <td class="num" style="color:var(--green)">R$ 1.200.000,00</td>
+              <td class="num" style="color:var(--muted)">sim</td>
+            </tr>
+            <tr class="is-flagged">
+              <td>J&uacute;lio H. Bandeira <span class="mono" style="font-size:11px;color:var(--red)">&middot; ciclo</span></td>
+              <td class="mono" style="font-size:13px;color:var(--muted)">12/08/2022</td>
+              <td class="mono" style="font-size:13px;color:var(--muted)">2022</td>
+              <td class="num" style="color:var(--green)">R$ 132.000,00</td>
+              <td class="num" style="color:var(--muted)">sim</td>
+            </tr>
+            <tr>
+              <td>Construtora Vale Azul S/A</td>
+              <td class="mono" style="font-size:13px;color:var(--muted)">30/08/2022</td>
+              <td class="mono" style="font-size:13px;color:var(--muted)">2022</td>
+              <td class="num" style="color:var(--green)">R$ 90.000,00</td>
+              <td class="num" style="color:var(--muted)">sim</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <details class="seal">
+          <summary>
+            <span class="seal__dot"></span>
+            <span class="seal__line">fonte: TSE &mdash; receitas_candidatos_2022 &middot; baixado 2026-03-01 &middot; sha256 7f30c1&hellip;</span>
+            <span class="seal__chev">&rsaquo;</span>
+          </summary>
+          <dl class="seal__body">
+            <dt>&oacute;rg&atilde;o</dt><dd>Tribunal Superior Eleitoral</dd>
+            <dt>arquivo</dt><dd>receitas_candidatos_2022_MG.csv</dd>
+            <dt>url</dt><dd><a href="#">cdn.tse.jus.br/estatistica/sead/odsele/prestacao_contas/&hellip;</a></dd>
+            <dt>coleta</dt><dd>2026-03-01T04:12:09Z</dd>
+            <dt>sha256</dt><dd>7f30c1e884ab5129d7e3f60a1c4b8927de05f3aa1b2f9c3e7d40518be2c9a77f</dd>
+            <dt>linhas</dt><dd>4.219.883</dd>
+          </dl>
+        </details>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:14px">
+        <span class="label">Carregando</span>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="skeleton" style="width:100%"></div>
+          <div class="skeleton" style="width:72%"></div>
+          <div class="skeleton" style="width:44%"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

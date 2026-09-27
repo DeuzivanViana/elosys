@@ -6,6 +6,9 @@ import {
   type SupplierPartnerFilter,
 } from "@/lib/queries";
 import { formatBRL, formatCnpj } from "@/lib/format";
+import { PageHeader } from "@/components/shell/shell-context";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const dynamic = "force-dynamic";
 
@@ -40,153 +43,135 @@ export default async function SocioFornecedorPage({ searchParams }: PageProps<"/
   };
 
   return (
-    <main className="min-h-screen">
-      <header className="flex flex-none items-center gap-4 border-b border-white/[0.07] px-6 py-3">
-        <Link href="/" className="mono-label hover:text-white/60">
-          ← início
-        </Link>
-        <div className="h-4 w-px bg-white/10" />
-        <div className="mono-label !text-white/45">sinais · sócio de fornecedor</div>
-      </header>
+    <div className="flex flex-col gap-8">
+      <PageHeader group="Sinais" current="Sócio de fornecedor" />
 
-      <section className="border-b border-white/[0.07] px-6 py-14 sm:px-14">
+      <section>
         <div className="mono-label">
           elosys/rules/candidate_supplier_partner.py · cruzamento derivado
         </div>
-        <h1 className="mt-3 text-[28px] leading-tight font-light tracking-tight sm:text-[34px]">
+        <h1 className="mt-3 text-[26px] leading-tight font-medium tracking-tight">
           Candidato sócio de uma empresa que recebeu dinheiro de campanha
         </h1>
-        <p className="mt-4 max-w-2xl text-[13px] leading-relaxed text-white/45">
-          O candidato aparece no <strong className="text-white/60">quadro societário</strong> (Receita, via
+        <p className="mt-4 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>
+          O candidato aparece no <strong style={{ color: "var(--fg-2)" }}>quadro societário</strong> (Receita, via
           BrasilAPI) de uma empresa que recebeu pagamento de alguma campanha.{" "}
-          <strong className="text-elo-amber">
-            A correspondência NÃO é confirmada
-          </strong>{" "}
-          — a fonte mascara o CPF do sócio, então isso casa o nome normalizado com um candidato E os 6
-          dígitos visíveis do CPF. Pode ser coincidência (duas pessoas, mesmo nome, mesmos 6 dígitos).
-          Casos ambíguos (2+ pessoas batendo) são descartados. Indício, não prova.
+          <strong style={{ color: "var(--fg-2)" }}>A correspondência NÃO é confirmada</strong> — a fonte
+          mascara o CPF do sócio, então isso casa o nome normalizado com um candidato E os 6 dígitos
+          visíveis do CPF. Pode ser coincidência (duas pessoas, mesmo nome, mesmos 6 dígitos). Casos
+          ambíguos (2+ pessoas batendo) são descartados. Indício, não prova.
         </p>
 
         {summary.total === 0 ? null : (
-          <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 font-mono text-[11px] text-white/45">
+          <div className="mono mt-6 flex flex-wrap items-center gap-x-6 gap-y-2" style={{ fontSize: 11, color: "var(--muted)" }}>
             <span>
-              <span className="text-foreground">{summary.total.toLocaleString("pt-BR")}</span> vínculos possíveis
+              <span style={{ color: "var(--fg-1)" }}>{summary.total.toLocaleString("pt-BR")}</span> vínculos possíveis
             </span>
             <span>
-              <span className="text-elo-red">{summary.self.toLocaleString("pt-BR")}</span> pagaram a própria empresa
+              <span style={{ color: "var(--red)" }}>{summary.self.toLocaleString("pt-BR")}</span> pagaram a própria empresa
             </span>
             <span>
-              <span className="text-elo-amber">{summary.others.toLocaleString("pt-BR")}</span> pagas por outra campanha
+              <span style={{ color: "var(--accent-2)" }}>{summary.others.toLocaleString("pt-BR")}</span> pagas por outra campanha
             </span>
             <span>
-              <span className="text-foreground">{formatBRL(summary.totalCents)}</span> movimentados nessas empresas
+              <span style={{ color: "var(--fg-1)" }}>{formatBRL(summary.totalCents)}</span> movimentados nessas empresas
             </span>
           </div>
         )}
 
-        <form className="mt-6 flex flex-wrap items-center gap-2" action="/sinais/socio-fornecedor">
+        <form className="mt-5 flex flex-wrap items-center gap-2" action="/sinais/socio-fornecedor">
           {FILTERS.map((f) => (
-            <Link
-              key={f.value}
-              href={hrefFor({ filtro: f.value, q })}
-              className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] tracking-[0.08em] uppercase ${
-                filter === f.value ? "border-foreground text-foreground" : "border-white/15 text-white/45 hover:text-white/70"
-              }`}
-            >
+            <Link key={f.value} href={hrefFor({ filtro: f.value, q })} className={`btn${filter === f.value ? " btn--primary" : ""}`}>
               {f.label}
             </Link>
           ))}
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="buscar candidato ou empresa…"
-            className="ml-2 w-64 rounded-sm border border-white/12 bg-white/[0.04] px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-white/30 outline-none focus:border-white/30"
-          />
+          <div className="input ml-2" style={{ width: 256 }}>
+            <input name="q" defaultValue={q} placeholder="buscar candidato ou empresa…" />
+          </div>
           {filter !== "all" ? <input type="hidden" name="filtro" value={filter} /> : null}
         </form>
       </section>
 
-      <section className="px-6 py-10 sm:px-14">
+      <section>
         {summary.total === 0 ? (
-          <div className="py-10 text-center font-mono text-[11px] text-white/35">
-            nenhum vínculo ainda — rode <code>elosys candidate-supplier-partner --db elosys.db</code> (precisa
-            de quadro societário já coletado via <code>receita-cnpj</code>).
-          </div>
+          <EmptyState
+            icon="◌"
+            title="nenhum vínculo ainda"
+            hint={
+              <>
+                <code>elosys candidate-supplier-partner --db elosys.db</code> (precisa de quadro
+                societário já coletado via <code>receita-cnpj</code>)
+              </>
+            }
+          />
         ) : rows.length === 0 ? (
-          <div className="py-10 text-center font-mono text-[11px] text-white/35">nada para esse filtro.</div>
+          <EmptyState icon="◌" title="nada para esse filtro." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-[12.5px]">
+          <div className="table-wrap">
+            <div className="overflow-x-auto">
+            <table className="table min-w-[760px]">
               <thead>
-                <tr className="border-b border-white/[0.12] text-left font-mono text-[9px] tracking-[0.1em] text-white/35 uppercase">
-                  <th className="py-2 pr-3 font-normal">candidato (sócio)</th>
-                  <th className="py-2 pr-3 font-normal">empresa</th>
-                  <th className="py-2 pr-3 font-normal">papel · desde</th>
-                  <th className="py-2 pr-3 text-right font-normal">recebeu de campanhas</th>
-                  <th className="py-2 text-right font-normal">quem pagou</th>
+                <tr>
+                  <th>candidato (sócio)</th>
+                  <th>empresa</th>
+                  <th>papel · desde</th>
+                  <th className="text-right">recebeu de campanhas</th>
+                  <th className="text-right">quem pagou</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={`${r.personId}-${r.companyCnpj}`} className="border-b border-white/[0.06] align-top">
-                    <td className="py-2.5 pr-3">
-                      <Link href={`/politico/${r.personId}`} className="hover:text-elo-amber hover:underline">
+                  <tr key={`${r.personId}-${r.companyCnpj}`}>
+                    <td>
+                      <Link href={`/politico/${r.personId}`} className="hover:underline">
                         {r.personName ?? "candidato"}
                       </Link>
-                      <div className="mono-label !text-[8px] !text-white/25">correspondência não confirmada</div>
+                      <div className="mono-label" style={{ fontSize: 8, color: "var(--muted-2)" }}>
+                        correspondência não confirmada
+                      </div>
                     </td>
-                    <td className="max-w-[240px] py-2.5 pr-3">
-                      <Link href={`/cnpj/${r.companyCnpj}`} className="hover:text-elo-amber hover:underline">
+                    <td className="max-w-[240px]">
+                      <Link href={`/cnpj/${r.companyCnpj}`} className="hover:underline">
                         {r.companyName ?? formatCnpj(r.companyCnpj)}
                       </Link>
-                      <div className="font-mono text-[9.5px] text-white/30">{formatCnpj(r.companyCnpj)}</div>
+                      <div className="mono" style={{ fontSize: 9.5, color: "var(--muted-2)" }}>
+                        {formatCnpj(r.companyCnpj)}
+                      </div>
                     </td>
-                    <td className="py-2.5 pr-3 text-white/55">
+                    <td style={{ color: "var(--muted)" }}>
                       {r.partnerRole ?? "—"}
-                      {r.partnerSince ? <span className="text-white/30"> · {r.partnerSince}</span> : null}
+                      {r.partnerSince ? <span style={{ color: "var(--muted-2)" }}> · {r.partnerSince}</span> : null}
                     </td>
-                    <td className="py-2.5 pr-3 text-right font-mono text-elo-amber">
+                    <td className="num" style={{ color: "var(--accent-2)" }}>
                       {formatBRL(r.paymentsTotalCents)}
-                      <div className="text-[9.5px] text-white/30">
+                      <div style={{ fontSize: 9.5, color: "var(--muted-2)" }}>
                         {r.paymentsCount.toLocaleString("pt-BR")} pagamentos
                       </div>
                     </td>
-                    <td className="py-2.5 text-right font-mono text-[10.5px]">
+                    <td className="num">
                       {r.paidBySelf ? (
-                        <span className="text-elo-red">a própria campanha</span>
+                        <span style={{ color: "var(--red)" }}>a própria campanha</span>
                       ) : (
-                        <span className="text-white/45">{r.payerCandidacies} campanha(s)</span>
+                        <span style={{ color: "var(--muted)" }}>{r.payerCandidacies} campanha(s)</span>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
+            {totalPages > 1 ? (
+              <div className="table-footer">
+                <PaginationLinks
+                  page={page}
+                  totalPages={totalPages}
+                  makeHref={(p) => hrefFor({ filtro: filter, q, page: String(p) })}
+                />
+              </div>
+            ) : null}
           </div>
         )}
-
-        {totalPages > 1 ? (
-          <div className="mt-8 flex items-center justify-center gap-4 font-mono text-[11px] text-white/45">
-            {page > 1 ? (
-              <Link href={hrefFor({ filtro: filter, q, page: String(page - 1) })} className="hover:text-white/70">
-                ← anterior
-              </Link>
-            ) : (
-              <span className="text-white/20">← anterior</span>
-            )}
-            <span>
-              página {page} de {totalPages}
-            </span>
-            {page < totalPages ? (
-              <Link href={hrefFor({ filtro: filter, q, page: String(page + 1) })} className="hover:text-white/70">
-                próxima →
-              </Link>
-            ) : (
-              <span className="text-white/20">próxima →</span>
-            )}
-          </div>
-        ) : null}
       </section>
-    </main>
+    </div>
   );
 }

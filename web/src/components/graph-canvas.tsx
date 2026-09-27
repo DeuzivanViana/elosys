@@ -24,6 +24,7 @@ import { EntityNode } from "./graph/entity-node";
 import { FloatingEdge } from "./graph/floating-edge";
 import { NODE_COLOR, NODE_KIND_LABEL, type GraphEdgeData, type GraphNodeData } from "./graph/types";
 import { Skeleton } from "./skeleton";
+import { useColorMode } from "@/lib/use-color-mode";
 
 const WIDTH = 1100;
 const HEIGHT = 700;
@@ -83,6 +84,7 @@ function toFlowNode(n: GraphNodeInfo, x: number, y: number, loading = false): Fl
 
 function GraphCanvasInner() {
   const router = useRouter();
+  const colorMode = useColorMode();
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
   const [q, setQ] = useState("");
@@ -134,7 +136,7 @@ function GraphCanvasInner() {
     return edgeList.map((e) => {
       const isCircular = circular.has(`${e.source}|${e.target}`);
       const kind = e.data!.kind;
-      const color = isCircular ? "#e0563f" : kind === "donation" ? "#4fb286" : "#8a93ff";
+      const color = isCircular ? "var(--red)" : kind === "donation" ? "var(--green)" : "var(--accent-2)";
       return {
         ...e,
         data: { ...e.data!, circular: isCircular },
@@ -319,7 +321,7 @@ function GraphCanvasInner() {
         // deliberately adds ONLY this one node, no donors/suppliers/network.
         const info: GraphNodeInfo = {
           cpfCnpj: r.cpfCnpj, type: r.type, kind: r.type === "person" ? "person" : "company",
-          label: r.label, sanctioned: false, registryStatus: null,
+          label: r.label, sanctioned: false, registryStatus: null, personId: null, photoUrl: null,
         };
         return runLayout(current, [info], []);
       });
@@ -431,7 +433,7 @@ function GraphCanvasInner() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.07] px-6 py-4">
+      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-1)] px-6 py-4">
         <div ref={boxRef} className="relative w-full max-w-md">
           <input
             value={q}
@@ -439,13 +441,13 @@ function GraphCanvasInner() {
             onFocus={() => results.length > 0 && setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             placeholder="buscar candidato/empresa, ou colar CPF/CNPJ…"
-            className="w-full rounded-sm border border-white/12 bg-white/[0.04] px-3 py-2.5 font-mono text-[12px] text-foreground placeholder:text-white/35 outline-none focus:border-white/30"
+            className="w-full rounded-sm border border-[var(--border-1)] bg-[var(--card-tone)] px-3 py-2.5 font-mono text-[12px] text-foreground placeholder:text-[var(--muted-2)] outline-none focus:border-[var(--border-2)]"
           />
           {open && (searching || results.length > 0) ? (
-            <div className="absolute z-20 mt-1.5 max-h-[50vh] w-full overflow-y-auto rounded-sm border border-white/12 bg-[#0d0d10] shadow-2xl">
+            <div className="absolute z-20 mt-1.5 max-h-[50vh] w-full overflow-y-auto rounded-sm border border-[var(--border-1)] bg-[var(--card-tone)] shadow-2xl">
               {searching && results.length === 0
                 ? Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 border-b border-white/5 px-3 py-2.5 last:border-0">
+                    <div key={i} className="flex items-center gap-3 border-b border-[var(--border-1)] px-3 py-2.5 last:border-0">
                       <Skeleton className="h-4 w-14 flex-none" />
                       <Skeleton className="h-3.5 flex-1" />
                     </div>
@@ -454,9 +456,9 @@ function GraphCanvasInner() {
                     <button
                       key={r.cpfCnpj}
                       onMouseDown={() => addNode(r)}
-                      className="flex w-full items-center gap-3 border-b border-white/5 px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-white/[0.06]"
+                      className="flex w-full items-center gap-3 border-b border-[var(--border-1)] px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-[var(--hover)]"
                     >
-                      <span className="flex-none rounded-sm border border-white/12 px-1.5 py-0.5 font-mono text-[8.5px] tracking-[0.08em] text-white/45 uppercase">
+                      <span className="flex-none rounded-sm border border-[var(--border-1)] px-1.5 py-0.5 font-mono text-[8.5px] tracking-[0.08em] text-[var(--muted)] uppercase">
                         {r.type === "person" ? "pessoa" : "empresa"}
                       </span>
                       <span className="min-w-0 flex-1 truncate text-[13px]">{r.label}</span>
@@ -466,34 +468,34 @@ function GraphCanvasInner() {
           ) : null}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="mono-label !text-white/35">movimentação</span>
+          <span className="mono-label !text-[var(--muted-2)]">movimentação</span>
           <input
             type="number"
             inputMode="decimal"
             value={minReais}
             onChange={(e) => setMinReais(e.target.value)}
             placeholder="mín. R$"
-            className="w-24 rounded-sm border border-white/12 bg-white/[0.04] px-2 py-1.5 font-mono text-[11px] text-foreground placeholder:text-white/30 outline-none focus:border-white/30"
+            className="w-24 rounded-sm border border-[var(--border-1)] bg-[var(--card-tone)] px-2 py-1.5 font-mono text-[11px] text-foreground placeholder:text-[var(--muted-2)] outline-none focus:border-[var(--border-2)]"
           />
-          <span className="text-white/25">–</span>
+          <span className="text-[var(--muted-2)]">–</span>
           <input
             type="number"
             inputMode="decimal"
             value={maxReais}
             onChange={(e) => setMaxReais(e.target.value)}
             placeholder="máx. R$"
-            className="w-24 rounded-sm border border-white/12 bg-white/[0.04] px-2 py-1.5 font-mono text-[11px] text-foreground placeholder:text-white/30 outline-none focus:border-white/30"
+            className="w-24 rounded-sm border border-[var(--border-1)] bg-[var(--card-tone)] px-2 py-1.5 font-mono text-[11px] text-foreground placeholder:text-[var(--muted-2)] outline-none focus:border-[var(--border-2)]"
           />
           {amountFilterActive ? (
             <button
               onClick={() => { setMinReais(""); setMaxReais(""); }}
-              className="mono-label !text-white/40 hover:!text-white/70"
+              className="mono-label !text-[var(--muted-2)] hover:!text-[var(--fg-2)]"
             >
               limpar filtro
             </button>
           ) : null}
         </div>
-        <span className="mono-label !text-white/35">
+        <span className="mono-label !text-[var(--muted-2)]">
           {visibleNodes.length} {visibleNodes.length === 1 ? "nó" : "nós"} · {visibleEdges.length} ligações
           {amountFilterActive ? ` (de ${nodes.length} · ${edges.length})` : ""}
         </span>
@@ -504,7 +506,7 @@ function GraphCanvasInner() {
           </span>
         ) : null}
         {nodes.length > 0 ? (
-          <button onClick={clearAll} className="mono-label ml-auto !text-white/45 hover:!text-white/70">
+          <button onClick={clearAll} className="mono-label ml-auto !text-[var(--muted)] hover:!text-[var(--fg-2)]">
             limpar tudo
           </button>
         ) : null}
@@ -513,8 +515,8 @@ function GraphCanvasInner() {
       <div className="relative flex-1">
         {nodes.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <div className="text-[18px] font-light text-white/55">Adicione um candidato ou empresa</div>
-            <p className="max-w-md text-[13px] leading-relaxed text-white/35">
+            <div className="text-[18px] font-light text-[var(--muted)]">Adicione um candidato ou empresa</div>
+            <p className="max-w-md text-[13px] leading-relaxed text-[var(--muted-2)]">
               Busque acima ou cole um CPF/CNPJ — cada busca adiciona só aquele nó, nada de rede
               inteira junto. Ao adicionar o próximo, o grafo procura um caminho de até 2 passos
               entre ele e o que já está na tela (ligação direta, ou por um doador/fornecedor/
@@ -531,30 +533,30 @@ function GraphCanvasInner() {
             onPaneClick={() => setSelected(null)}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            colorMode="dark"
+            colorMode={colorMode}
             fitView
             minZoom={0.15}
             proOptions={{ hideAttribution: true }}
           >
-            <Background color="rgba(255,255,255,.06)" gap={28} size={1.4} />
+            <Background color={colorMode === "dark" ? "rgba(255,255,255,.06)" : "rgba(0,0,0,.07)"} gap={28} size={1.4} />
             <Controls showInteractive={false} />
             <MiniMap
               pannable
               zoomable
-              maskColor="rgba(8,8,10,.75)"
+              maskColor={colorMode === "dark" ? "rgba(8,8,10,.75)" : "rgba(255,255,255,.75)"}
               nodeColor={(n) => NODE_COLOR[(n as FlowNode).data.kind].stroke}
             />
           </ReactFlow>
         )}
 
         {selectedNode ? (
-          <div className="absolute top-4 right-4 w-72 rounded-sm border border-white/12 bg-[#0d0d10] p-4 shadow-2xl">
+          <div className="absolute top-4 right-4 w-72 rounded-sm border border-[var(--border-1)] bg-[var(--card-tone)] p-4 shadow-2xl">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="mono-label !text-[8.5px]">{NODE_KIND_LABEL[selectedNode.data.kind]}</div>
                 <div className="mt-1 truncate text-[14px]">{selectedNode.data.label}</div>
               </div>
-              <button onClick={() => setSelected(null)} className="flex-none text-white/40 hover:text-white/70">
+              <button onClick={() => setSelected(null)} className="flex-none text-[var(--muted-2)] hover:text-[var(--fg-2)]">
                 ✕
               </button>
             </div>
@@ -562,22 +564,22 @@ function GraphCanvasInner() {
               <div className="mt-2 font-mono text-[9.5px] text-elo-red">⚠ sanção federal (CEIS/CNEP)</div>
             ) : null}
             {selectedNode.data.registryStatus ? (
-              <div className="mt-1 font-mono text-[9.5px] text-white/35">
+              <div className="mt-1 font-mono text-[9.5px] text-[var(--muted-2)]">
                 situação: {selectedNode.data.registryStatus}
               </div>
             ) : null}
 
             {selectedEdges.length > 0 ? (
-              <div className="mt-3 flex max-h-40 flex-col gap-2 overflow-y-auto border-t border-white/[0.07] pt-3">
+              <div className="mt-3 flex max-h-40 flex-col gap-2 overflow-y-auto border-t border-[var(--border-1)] pt-3">
                 {selectedEdges.map((e) => (
                   <div
                     key={e.id}
-                    className={`font-mono text-[10px] ${e.data?.circular ? "text-elo-red" : "text-white/50"}`}
+                    className={`font-mono text-[10px] ${e.data?.circular ? "text-elo-red" : "text-[var(--muted)]"}`}
                   >
                     {e.source === selectedNode.id ? "→" : "←"}{" "}
                     {e.data?.kind === "donation" ? "doou pra" : "pagou"}{" "}
                     {labelFor(e.source === selectedNode.id ? e.target : e.source)}
-                    <span className="text-white/35"> · {formatBRL(e.data?.amountCents ?? 0)}</span>
+                    <span className="text-[var(--muted-2)]"> · {formatBRL(e.data?.amountCents ?? 0)}</span>
                     {e.data?.circular ? " ⚠ circular" : ""}
                   </div>
                 ))}
@@ -595,7 +597,7 @@ function GraphCanvasInner() {
               </button>
               <button
                 onClick={() => removeNode(selectedNode.id)}
-                className="rounded-sm border border-white/16 px-3 py-2 font-mono text-[10px] tracking-[0.1em] text-white/60 uppercase hover:border-white/30 hover:text-foreground"
+                className="rounded-sm border border-[var(--border-2)] px-3 py-2 font-mono text-[10px] tracking-[0.1em] text-[var(--muted)] uppercase hover:border-[var(--border-2)] hover:text-foreground"
               >
                 remover
               </button>
@@ -604,7 +606,7 @@ function GraphCanvasInner() {
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-4 border-t border-white/[0.07] px-6 py-3 font-mono text-[9px] tracking-[0.1em] text-white/35 uppercase">
+      <div className="flex flex-wrap gap-4 border-t border-[var(--border-1)] px-6 py-3 font-mono text-[9px] tracking-[0.1em] text-[var(--muted-2)] uppercase">
         {(Object.keys(NODE_COLOR) as Array<keyof typeof NODE_COLOR>).map((k) => (
           <span key={k} className="flex items-center gap-1.5">
             <span
@@ -618,7 +620,7 @@ function GraphCanvasInner() {
           <span className="inline-block h-[2px] w-4 bg-elo-green" /> doação
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-[2px] w-4" style={{ background: "#8a93ff" }} /> pagamento
+          <span className="inline-block h-[2px] w-4" style={{ background: "var(--accent-2)" }} /> pagamento
         </span>
         <span className="flex items-center gap-1.5 !text-elo-red">
           <span className="inline-block h-[2px] w-4 bg-elo-red" /> caminho de doação circular

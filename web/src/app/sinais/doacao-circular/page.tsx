@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { getCircularDonationSignals, getCircularDonationSummary, type CircularDonationSort } from "@/lib/queries";
 import { entityHref, formatBRL, formatCpfCnpj } from "@/lib/format";
+import { PageHeader } from "@/components/shell/shell-context";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
 const SEVERITIES = ["high", "medium", "low"] as const;
 const SEVERITY_LABEL: Record<string, string> = { high: "alta", medium: "média", low: "baixa" };
-const SEVERITY_COLOR: Record<string, string> = {
-  high: "text-elo-red border-elo-red/40",
-  medium: "text-elo-amber border-elo-amber/40",
-  low: "text-white/50 border-white/20",
-};
+const SEVERITY_BADGE: Record<string, string> = { high: "badge--red", medium: "badge--accent", low: "" };
+const SEVERITY_CLASS: Record<string, string> = { high: "signal--high", medium: "signal--medium", low: "signal--low" };
 const SORTS: Array<{ value: CircularDonationSort; label: string }> = [
   { value: "severity", label: "severidade" },
   { value: "amount", label: "valor movimentado" },
@@ -47,41 +47,32 @@ export default async function CircularDonationsPage({
   };
 
   return (
-    <main className="min-h-screen">
-      <header className="flex flex-none items-center gap-4 border-b border-white/[0.07] px-6 py-3">
-        <Link href="/" className="mono-label hover:text-white/60">
-          ← início
-        </Link>
-        <div className="h-4 w-px bg-white/10" />
-        <div className="mono-label !text-white/45">sinais · doação circular</div>
-      </header>
+    <div className="flex flex-col gap-8">
+      <PageHeader group="Sinais" current="Doação circular" />
 
-      <section className="border-b border-white/[0.07] px-6 py-14 sm:px-14">
+      <section>
         <div className="mono-label">
           elosys/rules/circular_donations.py · algoritmo local (Tarjan SCC + DFS limitado em profundidade)
         </div>
-        <h1 className="mt-3 text-[28px] leading-tight font-light tracking-tight sm:text-[34px]">
+        <h1 className="mt-3 text-[26px] leading-tight font-medium tracking-tight">
           Loops de doação/despesa entre campanhas
         </h1>
-        <p className="mt-4 max-w-2xl text-[13px] leading-relaxed text-white/45">
+        <p className="mt-4 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>
           Cada sinal abaixo é um ciclo real de movimentação encontrado na base inteira: dinheiro
           que saiu de uma campanha e, seguindo doações e despesas, voltou pra mesma cadeia.{" "}
-          <strong className="text-white/60">Isso é indício, não prova</strong> — pode ser
+          <strong style={{ color: "var(--fg-2)" }}>Isso é indício, não prova</strong> — pode ser
           coincidência entre campanhas de coligação, ressarcimento, ou merecer uma checagem manual
           mais de perto.
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 font-mono text-[11px] text-white/45">
+        <div className="mono mt-6 flex flex-wrap items-center gap-x-6 gap-y-2" style={{ fontSize: 11, color: "var(--muted)" }}>
           <span>
-            <span className="text-foreground">{summary.total.toLocaleString("pt-BR")}</span> sinais total
+            <span style={{ color: "var(--fg-1)" }}>{summary.total.toLocaleString("pt-BR")}</span> sinais total
           </span>
           {SEVERITIES.map((sv) =>
             summary.bySeverity[sv] ? (
               <span key={sv}>
-                <span className={SEVERITY_COLOR[sv].split(" ")[0]}>
-                  {summary.bySeverity[sv].toLocaleString("pt-BR")}
-                </span>{" "}
-                {SEVERITY_LABEL[sv]}
+                {summary.bySeverity[sv].toLocaleString("pt-BR")} {SEVERITY_LABEL[sv]}
               </span>
             ) : null
           )}
@@ -89,100 +80,63 @@ export default async function CircularDonationsPage({
           {summary.runAt ? <span>última execução: {summary.runAt}</span> : null}
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <Link
-            href={hrefFor({ severity: undefined, sort })}
-            className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] tracking-[0.08em] uppercase ${
-              !severity ? "border-foreground text-foreground" : "border-white/15 text-white/45 hover:text-white/70"
-            }`}
-          >
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <Link href={hrefFor({ severity: undefined, sort })} className={`btn${!severity ? " btn--primary" : ""}`}>
             todas
           </Link>
           {SEVERITIES.map((sv) => (
-            <Link
-              key={sv}
-              href={hrefFor({ severity: sv, sort })}
-              className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] tracking-[0.08em] uppercase ${
-                severity === sv ? SEVERITY_COLOR[sv] : "border-white/15 text-white/45 hover:text-white/70"
-              }`}
-            >
+            <Link key={sv} href={hrefFor({ severity: sv, sort })} className={`btn${severity === sv ? " btn--primary" : ""}`}>
               {SEVERITY_LABEL[sv]}
             </Link>
           ))}
-          <div className="mx-2 h-4 w-px bg-white/10" />
-          <span className="mono-label !text-white/35">ordenar por</span>
+          <div className="mx-2 h-4 w-px" style={{ background: "var(--border-1)" }} />
+          <span className="label">ordenar por</span>
           {SORTS.map((s) => (
-            <Link
-              key={s.value}
-              href={hrefFor({ severity, sort: s.value })}
-              className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] tracking-[0.08em] uppercase ${
-                sort === s.value ? "border-foreground text-foreground" : "border-white/15 text-white/45 hover:text-white/70"
-              }`}
-            >
+            <Link key={s.value} href={hrefFor({ severity, sort: s.value })} className={`btn${sort === s.value ? " btn--primary" : ""}`}>
               {s.label}
             </Link>
           ))}
         </div>
       </section>
 
-      <section className="px-6 py-10 sm:px-14">
+      <section>
         {summary.total === 0 ? (
-          <div className="py-10 text-center font-mono text-[11px] text-white/35">
-            nenhum sinal ainda — rode <code>elosys rule-circular-donations --db elosys.db</code>.
-          </div>
+          <EmptyState
+            icon="◌"
+            title="nenhum sinal ainda"
+            hint={<code>elosys rule-circular-donations --db elosys.db</code>}
+          />
         ) : signals.length === 0 ? (
-          <div className="py-10 text-center font-mono text-[11px] text-white/35">
-            sem sinais para esse filtro.
-          </div>
+          <EmptyState icon="◌" title="sem sinais para esse filtro." />
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {signals.map((s) => {
               const addParam = s.actors.map((a) => a.cpfCnpj).join(",");
               return (
-                <div
-                  key={s.id}
-                  className="rounded-sm border border-white/[0.08] bg-white/[0.02] p-5"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-3">
+                <article key={s.id} className={`signal ${SEVERITY_CLASS[s.severity] ?? ""}`}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className={`badge ${SEVERITY_BADGE[s.severity] ?? ""}`}>
+                      severidade {SEVERITY_LABEL[s.severity] ?? s.severity}
+                    </span>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--muted-2)" }}>
+                      {s.pathLength} {s.pathLength === 1 ? "nó" : "nós"}
+                    </span>
+                    {s.aiReview ? (
                       <span
-                        className={`rounded-sm border px-2 py-0.5 font-mono text-[9px] tracking-[0.1em] uppercase ${SEVERITY_COLOR[s.severity]}`}
+                        className={`badge ${
+                          s.aiReview.verdict === "bizarro" ? "badge--red" : s.aiReview.verdict === "inconclusivo" ? "badge--accent" : ""
+                        }`}
                       >
-                        severidade {SEVERITY_LABEL[s.severity] ?? s.severity}
+                        IA: {s.aiReview.verdict === "plausivel" ? "plausível" : s.aiReview.verdict}
                       </span>
-                      <span className="font-mono text-[11px] text-elo-amber">{formatBRL(s.amountCents)}</span>
-                      <span className="font-mono text-[10px] text-white/40">
-                        {s.pathLength} {s.pathLength === 1 ? "nó" : "nós"}
-                      </span>
-                      {s.aiReview ? (
-                        <span
-                          className={`rounded-sm border px-2 py-0.5 font-mono text-[9px] tracking-[0.1em] uppercase ${
-                            s.aiReview.verdict === "bizarro"
-                              ? "border-elo-red/40 text-elo-red"
-                              : s.aiReview.verdict === "inconclusivo"
-                                ? "border-elo-amber/40 text-elo-amber"
-                                : "border-white/20 text-white/50"
-                          }`}
-                        >
-                          IA: {s.aiReview.verdict === "plausivel" ? "plausível" : s.aiReview.verdict}
-                        </span>
-                      ) : null}
-                    </div>
-                    {addParam ? (
-                      <Link
-                        href={`/grafo?add=${encodeURIComponent(addParam)}`}
-                        className="mono-label !text-white/45 hover:!text-elo-amber"
-                      >
-                        ver no grafo →
-                      </Link>
                     ) : null}
+                    <span className="num" style={{ marginLeft: "auto", fontSize: 17 }}>{formatBRL(s.amountCents)}</span>
                   </div>
 
-                  <p className="mt-3 text-[13px] leading-relaxed text-white/70">{s.explanation}</p>
+                  <p className="mt-3 text-[14.5px] leading-relaxed" style={{ color: "var(--fg-2)" }}>{s.explanation}</p>
                   {s.aiReview ? (
-                    <p className="mt-2 border-l-2 border-white/10 pl-3 text-[12px] leading-relaxed text-white/45">
-                      <span className="mono-label !text-white/30">IA · {s.aiReview.model}</span>{" "}
-                      {s.aiReview.explanation}
+                    <p className="mt-2 border-l-2 pl-3 text-[12px] leading-relaxed" style={{ borderColor: "var(--border-1)", color: "var(--muted)" }}>
+                      <span className="mono-label">IA · {s.aiReview.model}</span> {s.aiReview.explanation}
                     </p>
                   ) : null}
 
@@ -191,7 +145,7 @@ export default async function CircularDonationsPage({
                       {s.actors.map((a) => {
                         const href = entityHref(a.cpfCnpj);
                         const chip = (
-                          <span className="rounded-sm border border-white/12 px-2 py-1 font-mono text-[10px] text-white/60">
+                          <span className="mono rounded-[var(--r-sm)] border border-[var(--border-1)] px-2 py-1" style={{ fontSize: 10, color: "var(--muted)" }}>
                             {a.label !== a.cpfCnpj ? `${a.label} · ` : ""}
                             {formatCpfCnpj(a.cpfCnpj)}
                           </span>
@@ -206,34 +160,30 @@ export default async function CircularDonationsPage({
                       })}
                     </div>
                   ) : null}
-                </div>
+
+                  {addParam ? (
+                    <div className="mt-4">
+                      <Link href={`/grafo?add=${encodeURIComponent(addParam)}`} className="btn btn--primary">
+                        Ver no grafo
+                      </Link>
+                    </div>
+                  ) : null}
+                </article>
               );
             })}
           </div>
         )}
 
         {totalPages > 1 ? (
-          <div className="mt-8 flex items-center justify-center gap-4 font-mono text-[11px] text-white/45">
-            {page > 1 ? (
-              <Link href={hrefFor({ severity, sort, page: String(page - 1) })} className="hover:text-white/70">
-                ← anterior
-              </Link>
-            ) : (
-              <span className="text-white/20">← anterior</span>
-            )}
-            <span>
-              página {page} de {totalPages}
-            </span>
-            {page < totalPages ? (
-              <Link href={hrefFor({ severity, sort, page: String(page + 1) })} className="hover:text-white/70">
-                próxima →
-              </Link>
-            ) : (
-              <span className="text-white/20">próxima →</span>
-            )}
+          <div className="mt-8 flex items-center justify-center border-t border-[var(--border-1)] pt-4">
+            <PaginationLinks
+              page={page}
+              totalPages={totalPages}
+              makeHref={(p) => hrefFor({ severity, sort, page: String(p) })}
+            />
           </div>
         ) : null}
       </section>
-    </main>
+    </div>
   );
 }

@@ -9,6 +9,12 @@
 /dados_tmp/
 *.zip
 
+# logs de execução ad-hoc de crawlers (o *_report.json formal é o que se versiona)
+*.log
+
+# estado local/efêmero do Claude Code, não do projeto
+.claude/scheduled_tasks.lock
+
 # python
 __pycache__/
 *.py[cod]

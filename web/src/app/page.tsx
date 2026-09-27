@@ -1,27 +1,41 @@
-import Link from "next/link";
 import { SearchBox } from "@/components/search-box";
 import { TopSuppliers } from "@/components/top-suppliers";
+import { PageHeader } from "@/components/shell/shell-context";
+import { YearSelect } from "@/components/ui/year-select";
 import { getHomeStats } from "@/lib/stats";
 import { getExpenseYears } from "@/lib/queries";
 import { formatBRL } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
-  const stats = getHomeStats();
+export default async function Home({ searchParams }: PageProps<"/">) {
+  const sp = await searchParams;
+  const anoParam = typeof sp.ano === "string" ? Number(sp.ano) : NaN;
   const expenseYears = getExpenseYears();
+  const year = Number.isInteger(anoParam) && expenseYears.includes(anoParam) ? anoParam : undefined;
+
+  const stats = getHomeStats(year);
 
   const heroStats = [
     { label: "pessoas", value: stats.people.toLocaleString("pt-BR") },
     { label: "candidaturas", value: stats.candidacies.toLocaleString("pt-BR") },
-    { label: "doações recebidas", value: formatBRL(stats.donationsTotalCents) },
+    { label: "doações recebidas", value: formatBRL(stats.donationsTotalCents), tone: "green" as const },
     { label: "despesas contratadas", value: formatBRL(stats.expensesTotalCents) },
-    { label: "período coberto", value: stats.years },
+    { label: year ? "eleição" : "período coberto", value: stats.years },
   ];
 
   return (
-    <main className="flex min-h-screen flex-col">
-      <div className="relative overflow-hidden border-b border-white/[0.07] px-6 py-20 sm:px-14 sm:py-28">
+    <div className="flex flex-col gap-10">
+      <PageHeader
+        group="EloSys"
+        current="Início"
+        actions={<YearSelect basePath="/" years={expenseYears} value={year} allLabel="todos os anos" />}
+      />
+
+      <div
+        className="animate-in relative overflow-hidden rounded-[var(--r-page)] border border-[var(--border-1)] px-6 py-16 sm:px-12 sm:py-20"
+      >
+        <div className="hero-glow" aria-hidden />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
@@ -31,75 +45,46 @@ export default function Home() {
             maskImage: "radial-gradient(900px 420px at 22% 30%, #000, transparent 72%)",
           }}
         />
-        <div className="relative mx-auto max-w-3xl">
-          <div className="mb-7 flex items-center gap-3">
-            <span className="h-px w-8 bg-white/30" />
-            <span className="mono-label">busca de dados públicos · CPF/CNPJ</span>
-          </div>
-          <h1 className="text-[clamp(34px,6vw,60px)] leading-[1.04] font-light tracking-tight text-balance">
-            Ficha pública de <span className="text-white/45">qualquer candidato</span> brasileiro
-            <span className="text-elo-amber">.</span>
+        <div className="relative max-w-2xl">
+          <div className="mono-label mb-4">busca de dados públicos · CPF/CNPJ</div>
+          <h1 className="text-[clamp(30px,5vw,48px)] leading-[1.06] font-medium tracking-tight text-balance">
+            Ficha pública de <span className="text-[var(--muted)]">qualquer candidato</span> brasileiro
+            <span className="text-[var(--accent-2)]">.</span>
           </h1>
-          <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-white/55">
+          <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">
             Busque por nome ou CPF. Cada campo mostra de qual arquivo do TSE ele saiu, quando foi
             baixado e o hash que comprova que não foi alterado.
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-4">
+          <div className="mt-8">
             <SearchBox />
-            <Link
-              href="/grafo"
-              className="mono-label flex items-center gap-2 rounded-sm border border-white/12 px-4 py-3.5 !text-white/55 hover:border-white/30 hover:!text-white/85"
-            >
-              ⌗ grafo de correlações
-            </Link>
-            <Link
-              href="/sinais/doacao-circular"
-              className="mono-label flex items-center gap-2 rounded-sm border border-white/12 px-4 py-3.5 !text-white/55 hover:border-white/30 hover:!text-white/85"
-            >
-              ⟲ doação circular
-            </Link>
-            <Link
-              href="/sinais/analise-ia"
-              className="mono-label flex items-center gap-2 rounded-sm border border-white/12 px-4 py-3.5 !text-white/55 hover:border-white/30 hover:!text-white/85"
-            >
-              ✦ análise de IA
-            </Link>
-            <Link
-              href="/sinais/socio-fornecedor"
-              className="mono-label flex items-center gap-2 rounded-sm border border-white/12 px-4 py-3.5 !text-white/55 hover:border-white/30 hover:!text-white/85"
-            >
-              ⌂ sócio de fornecedor
-            </Link>
-            <Link
-              href="/sinais/discurso"
-              className="mono-label flex items-center gap-2 rounded-sm border border-white/12 px-4 py-3.5 !text-white/55 hover:border-white/30 hover:!text-white/85"
-            >
-              ✎ discurso em rede social
-            </Link>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 border-b border-white/[0.07] sm:grid-cols-5">
-        {heroStats.map((s) => (
-          <div key={s.label} className="border-r border-white/[0.07] px-6 py-6 last:border-r-0">
-            <div className="mono-label">{s.label}</div>
-            <div className="mt-3 text-[28px] font-light tracking-tight">{s.value}</div>
-          </div>
-        ))}
+      <section className="animate-in flex flex-col gap-4" style={{ animationDelay: "80ms" }}>
+        <div className="kpis">
+          {heroStats.map((s) => (
+            <div key={s.label} className="kpi">
+              <div className="kpi__label">{s.label}</div>
+              <div className={`kpi__value${s.tone === "green" ? " kpi__value--green" : ""}`}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="animate-in" style={{ animationDelay: "150ms" }}>
+        <TopSuppliers years={expenseYears} initialYear={year} />
       </div>
 
-      <TopSuppliers years={expenseYears} />
-
-      <div className="mx-auto w-full max-w-3xl px-6 py-14 sm:px-14">
-        <div className="mono-label mb-4">indício não é prova</div>
-        <p className="max-w-2xl text-[13.5px] leading-relaxed text-white/50 text-pretty">
+      <div className="card animate-in max-w-2xl" style={{ animationDelay: "220ms" }}>
+        <div className="label mb-3">indício não é prova</div>
+        <p className="text-[13.5px] leading-relaxed text-[var(--muted)]">
           O EloSys reúne dados que já são públicos por lei (registro de candidatura do TSE,
           prestação de contas eleitorais, redes sociais declaradas) e os organiza por pessoa. Nada
           aqui é acusação — é o dado bruto oficial, com a fonte exposta em cada campo, para que
           qualquer um confira e vá além se quiser apurar.
         </p>
       </div>
-    </main>
+    </div>
   );
 }

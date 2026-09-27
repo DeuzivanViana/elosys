@@ -7,7 +7,6 @@ import {
   Background,
   Controls,
   MarkerType,
-  MiniMap,
   ReactFlow,
   ReactFlowProvider,
   type Edge,
@@ -15,9 +14,10 @@ import {
   type NodeMouseHandler,
 } from "@xyflow/react";
 import type { PoliticianDonationNetwork, PoliticianNetworkBranch, PoliticianNetworkNode } from "@/lib/queries";
+import { useColorMode } from "@/lib/use-color-mode";
 import { EntityNode } from "./graph/entity-node";
 import { FloatingEdge } from "./graph/floating-edge";
-import { NODE_COLOR, type GraphEdgeData, type GraphNodeData } from "./graph/types";
+import type { GraphEdgeData, GraphNodeData } from "./graph/types";
 
 // Same node/edge components, palette and floating-edge geometry as /grafo --
 // this is the depth-2 politician-to-politician slice of that same graph.
@@ -27,16 +27,16 @@ const edgeTypes = { floating: FloatingEdge };
 type NetNode = Node<GraphNodeData, "entity">;
 type NetEdge = Edge<GraphEdgeData, "floating">;
 
-const CENTER_R = 30;
-const NODE_R = 24;
-const NODE_BOX_H = 96; // circle + label + kind label -> vertical room one node needs
-const MIN_BAND = NODE_BOX_H + 8;
+const CENTER_R = 32;
+const NODE_R = 22;
+const NODE_BOX_H = 88; // circle + label + kind label -> vertical room one node needs
+const MIN_BAND = NODE_BOX_H + 6;
 const CHILD_ROW = NODE_BOX_H; // vertical pitch between level-2 siblings
-const PAD_Y = 24;
+const PAD_Y = 20;
 const WIDTH = 1040;
 // Pan a little, never enough to drag the whole thing off-screen (unlike the
 // free-roam /grafo). translateExtent + a tight zoom range.
-const PAN_MARGIN = 160;
+const PAN_MARGIN = 140;
 
 function toNode(n: PoliticianNetworkNode, x: number, y: number): NetNode {
   return {
@@ -54,12 +54,16 @@ function toNode(n: PoliticianNetworkNode, x: number, y: number): NetNode {
       registryStatus: null,
       radius: NODE_R,
       loading: false,
+      photoUrl: n.photoUrl,
     },
   };
 }
 
-function toEdge(donorId: string, recipientId: string, amountCents: number, faint = false): NetEdge {
-  const color = "#4fb286"; // donation green, same as /grafo
+// Money IN (received) is green; money OUT (donated by the candidate) is the
+// brand violet — two clearly different colors, per direction, never both
+// green. A reciprocal pair (circular) overrides both to red further down.
+function toEdge(donorId: string, recipientId: string, amountCents: number, direction: "in" | "out", faint = false): NetEdge {
+  const color = direction === "in" ? "var(--green)" : "var(--accent-2)";
   const w = Math.min(2.6, 0.6 + Math.log10(Math.max(1, amountCents) / 100) * 0.4);
   return {
     id: `${donorId}->${recipientId}`,
@@ -67,7 +71,7 @@ function toEdge(donorId: string, recipientId: string, amountCents: number, faint
     target: recipientId,
     type: "floating",
     data: { amountCents, kind: "donation", circular: false, showLabel: !faint },
-    style: { stroke: color, strokeWidth: faint ? Math.min(w, 1.4) : w, opacity: faint ? 0.4 : 0.6 },
+    style: { stroke: color, strokeWidth: faint ? Math.min(w, 1.4) : w, opacity: faint ? 0.45 : 0.75 },
     markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 },
   };
 }
@@ -81,6 +85,7 @@ function layoutSide(
   let cursor = (totalHeight - sideHeight) / 2;
   const nodes: NetNode[] = [];
   const edges: NetEdge[] = [];
+  const direction = side === "left" ? "in" : "out"; // left = they gave TO the candidate, right = candidate gave TO them
 
   branches.forEach((b, i) => {
     const bandHeight = bandHeights[i];
@@ -91,8 +96,8 @@ function layoutSide(
     // right = the center donated TO level-1.
     edges.push(
       side === "left"
-        ? toEdge(parentId, "center", b.node.amountCents)
-        : toEdge("center", parentId, b.node.amountCents)
+        ? toEdge(parentId, "center", b.node.amountCents, direction)
+        : toEdge("center", parentId, b.node.amountCents, direction)
     );
 
     const childrenStart = cursor + (bandHeight - b.children.length * CHILD_ROW) / 2 + CHILD_ROW / 2;
@@ -101,8 +106,8 @@ function layoutSide(
       nodes.push(toNode(c, childX, childrenStart + j * CHILD_ROW));
       edges.push(
         side === "left"
-          ? toEdge(childId, parentId, c.amountCents, true)
-          : toEdge(parentId, childId, c.amountCents, true)
+          ? toEdge(childId, parentId, c.amountCents, direction, true)
+          : toEdge(parentId, childId, c.amountCents, direction, true)
       );
     });
     cursor += bandHeight;
@@ -110,7 +115,9 @@ function layoutSide(
   return { nodes, edges };
 }
 
-function Inner({ network, centerLabel }: { network: PoliticianDonationNetwork; centerLabel: string }) {
+function Inner({
+  network, centerLabel, centerPhotoUrl,
+}: { network: PoliticianDonationNetwork; centerLabel: string; centerPhotoUrl: string | null }) {
   const router = useRouter();
   const { donatedTo, receivedFrom } = network;
 
@@ -131,17 +138,63 @@ function Inner({ network, centerLabel }: { network: PoliticianDonationNetwork; c
       draggable: false,
       connectable: false,
       data: {
-        cpfCnpj: "", type: "person", kind: "politician", label: centerLabel,
+        cpfCnpj: "", type: "person", kind: "self", label: centerLabel,
         sanctioned: false, registryStatus: null, radius: CENTER_R, loading: false,
+        photoUrl: centerPhotoUrl,
       },
     };
 
+    // A person who BOTH received from and donated to the candidate (at the
+    // top level, directly connected to "center") is a real, visible circular
+    // flow in this exact dataset — not a guess. Mark it: red ring on the
+    // node, both edges turn red/dashed regardless of direction. (A cycle
+    // that only closes through an *expense*, not a donation, can't be seen
+    // from this donation-only network — see the "sinais de alerta" section
+    // above for those, via the full-graph rule.)
+    const leftTopIds = new Set(receivedFrom.map((b) => `p${b.node.personId}`));
+    const rightTopIds = new Set(donatedTo.map((b) => `p${b.node.personId}`));
+    const circularIds = new Set([...leftTopIds].filter((id) => rightTopIds.has(id)));
+
+    const bumpedLeft = bump(left.nodes);
+    const bumpedRight = bump(right.nodes);
+
+    // A person can legitimately appear on both sides (donated to the center
+    // AND received from them) or as both a level-1 and level-2 node on the
+    // same side — dedupe by id or React Flow renders duplicate-keyed nodes,
+    // which thrashes re-renders. Keep the LEFT position when both exist so
+    // circular nodes land on the donor side.
+    const seen = new Set<string>();
+    const allNodes = [centerNode, ...bumpedLeft, ...bumpedRight]
+      .filter((n) => {
+        if (seen.has(n.id)) return false;
+        seen.add(n.id);
+        return true;
+      })
+      .map((n) => (circularIds.has(n.id) ? { ...n, data: { ...n.data, circular: true } } : n));
+
+    const seenEdge = new Set<string>();
+    const allEdges = [...left.edges, ...right.edges]
+      .filter((e) => {
+        if (seenEdge.has(e.id)) return false;
+        seenEdge.add(e.id);
+        return true;
+      })
+      .map((e) => {
+        const isCircularEdge = circularIds.has(e.source) || circularIds.has(e.target);
+        if (!isCircularEdge) return e;
+        return {
+          ...e,
+          style: { ...e.style, stroke: "var(--red)", strokeDasharray: "7 5", opacity: 0.95 },
+          markerEnd: { type: MarkerType.ArrowClosed as const, color: "var(--red)", width: 14, height: 14 },
+        };
+      });
+
     return {
-      nodes: [centerNode, ...bump(left.nodes), ...bump(right.nodes)],
-      edges: [...left.edges, ...right.edges],
+      nodes: allNodes,
+      edges: allEdges,
       height: h,
     };
-  }, [donatedTo, receivedFrom, centerLabel]);
+  }, [donatedTo, receivedFrom, centerLabel, centerPhotoUrl]);
 
   const onNodeClick: NodeMouseHandler<NetNode> = useCallback(
     (_e, node) => {
@@ -150,15 +203,17 @@ function Inner({ network, centerLabel }: { network: PoliticianDonationNetwork; c
     [router]
   );
 
+  const colorMode = useColorMode();
+
   return (
-    <div style={{ height: Math.min(600, height) }} className="w-full rounded-sm border border-white/[0.07]">
+    <div style={{ height: Math.min(560, height) }} className="w-full rounded-sm border border-[var(--border-1)]">
       <ReactFlow<NetNode, NetEdge>
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodeClick={onNodeClick}
-        colorMode="dark"
+        colorMode={colorMode}
         fitView
         minZoom={0.4}
         maxZoom={1.6}
@@ -170,26 +225,20 @@ function Inner({ network, centerLabel }: { network: PoliticianDonationNetwork; c
         nodesConnectable={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="rgba(255,255,255,.06)" gap={26} size={1.2} />
+        <Background color={colorMode === "dark" ? "rgba(255,255,255,.05)" : "rgba(0,0,0,.06)"} gap={26} size={1.2} />
         <Controls showInteractive={false} />
-        <MiniMap
-          pannable
-          zoomable
-          maskColor="rgba(8,8,10,.75)"
-          nodeColor={(n) => NODE_COLOR[(n as NetNode).data.kind].stroke}
-        />
       </ReactFlow>
     </div>
   );
 }
 
 export function PoliticianNetwork({
-  network, centerLabel,
-}: { network: PoliticianDonationNetwork; centerLabel: string }) {
+  network, centerLabel, centerPhotoUrl,
+}: { network: PoliticianDonationNetwork; centerLabel: string; centerPhotoUrl: string | null }) {
   if (network.donatedTo.length === 0 && network.receivedFrom.length === 0) return null;
   return (
     <ReactFlowProvider>
-      <Inner network={network} centerLabel={centerLabel} />
+      <Inner network={network} centerLabel={centerLabel} centerPhotoUrl={centerPhotoUrl} />
     </ReactFlowProvider>
   );
 }

@@ -1,5 +1,5 @@
-/** shadcn-style shimmer placeholder. Use while a client component is
- * fetching, sized to roughly match the real content it replaces. */
-export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-sm bg-white/[0.06] ${className}`} aria-hidden />;
+/** Shimmer placeholder shown while a section's data is still in flight
+ * (client fetch, or a server section streamed in behind <Suspense>). */
+export function Skeleton({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={`skeleton ${className}`} style={style} aria-hidden />;
 }

@@ -46,18 +46,26 @@ function pickProvenance(row: Record<string, unknown>): Provenance {
 // Search
 // ---------------------------------------------------------------------
 
-export type SearchResult = {
-  personId: number;
-  canonicalName: string;
-  cpf: string | null;
-  cpfTrusted: boolean;
-  candidacyCount: number;
-  latestYear: number;
-  latestOffice: string | null;
-  latestPartyAbbr: string | null;
-  latestState: string | null;
-  latestResult: string | null;
-};
+export type SearchResult =
+  | {
+      kind: "candidato";
+      personId: number;
+      canonicalName: string;
+      cpf: string | null;
+      cpfTrusted: boolean;
+      candidacyCount: number;
+      latestYear: number;
+      latestOffice: string | null;
+      latestPartyAbbr: string | null;
+      latestState: string | null;
+      latestResult: string | null;
+      photoUrl: string | null;
+    }
+  | {
+      kind: "pessoa_fisica";
+      cpf: string;
+      canonicalName: string;
+    };
 
 export function searchPeople(rawQuery: string, limit = 25): SearchResult[] {
   const query = rawQuery.trim();
@@ -98,9 +106,11 @@ export function searchPeople(rawQuery: string, limit = 25): SearchResult[] {
   // Over-fetch candidates before the name filter narrows further (LIMIT
   // applies inside `matches`, before we know which rows even have a
   // candidacy), then trim to `limit` after sorting by recency.
-  const rows = (db().prepare(sql).all(pattern, limit * 4) as Array<Record<string, unknown>>)
+  const candidateRows = (db().prepare(sql).all(pattern, limit * 4) as Array<Record<string, unknown>>)
     .slice(0, limit);
-  return rows.map((r) => ({
+  const candidatePhotoUrls = batchPhotoUrls(candidateRows.map((r) => r.personId as number));
+  const candidates: SearchResult[] = candidateRows.map((r) => ({
+    kind: "candidato",
     personId: r.personId as number,
     canonicalName: r.canonicalName as string,
     cpf: (r.cpf as string) ?? null,
@@ -111,7 +121,60 @@ export function searchPeople(rawQuery: string, limit = 25): SearchResult[] {
     latestPartyAbbr: (r.latestPartyAbbr as string) ?? null,
     latestState: (r.latestState as string) ?? null,
     latestResult: (r.latestResult as string) ?? null,
+    photoUrl: candidatePhotoUrls.get(r.personId as number) ?? null,
   }));
+  if (candidates.length >= limit) return candidates;
+
+  // A name can also belong to someone who's never been a candidate — just a
+  // CPF that shows up as a donor or a supplier. Those never get a `people`
+  // row (see schema.sql's note on donor identity policy), so they can't be
+  // found above; look them up straight from the raw donation/expense text
+  // instead, and surface them labeled "pessoa física" so it's clear this
+  // isn't a candidate profile. `donor_cpf_cnpj`/`supplier_cpf_cnpj` are
+  // plain-indexed, so a CPF prefix search stays a direct LIKE; a NAME
+  // search instead goes through `pessoa_fisica_search`, an FTS5 table
+  // materialized from the same two columns (see maybe_build_pessoa_fisica_fts
+  // below) — a `LIKE '%x%'` substring scan across ~14M donation/expense
+  // rows took 100s+, the FTS index does the same lookup in single-digit ms.
+  const known = new Set(candidates.map((c) => (c.kind === "candidato" ? c.cpf : null)).filter(Boolean));
+  const remaining = limit - candidates.length;
+  let personRows: Array<{ cpf: string; name: string | null }>;
+  if (looksLikeCpf) {
+    const cpfPattern = `${digits}%`;
+    personRows = db()
+      .prepare(
+        `WITH matches AS (
+           SELECT donor_cpf_cnpj AS cpf, donor_name AS name FROM campaign_donation
+           WHERE donor_company_id IS NULL AND donor_cpf_cnpj IS NOT NULL AND length(donor_cpf_cnpj) = 11
+             AND donor_cpf_cnpj LIKE ?
+           UNION
+           SELECT supplier_cpf_cnpj AS cpf, supplier_name AS name FROM campaign_expense
+           WHERE supplier_company_id IS NULL AND supplier_cpf_cnpj IS NOT NULL AND length(supplier_cpf_cnpj) = 11
+             AND supplier_cpf_cnpj LIKE ?
+         )
+         SELECT cpf, max(name) AS name FROM matches GROUP BY cpf LIMIT ?`
+      )
+      .all(cpfPattern, cpfPattern, remaining * 2) as typeof personRows;
+  } else if (hasTable("pessoa_fisica_search")) {
+    const ftsQuery = normalizeName(query)
+      .split(" ")
+      .filter(Boolean)
+      .map((tok) => `"${tok.replace(/"/g, '""')}"*`)
+      .join(" ");
+    personRows = ftsQuery
+      ? (db()
+          .prepare("SELECT cpf, name FROM pessoa_fisica_search WHERE pessoa_fisica_search MATCH ? LIMIT ?")
+          .all(ftsQuery, remaining * 2) as typeof personRows)
+      : [];
+  } else {
+    personRows = [];
+  }
+  const persons: SearchResult[] = personRows
+    .filter((r) => !known.has(r.cpf))
+    .slice(0, remaining)
+    .map((r) => ({ kind: "pessoa_fisica", cpf: r.cpf, canonicalName: r.name ?? r.cpf }));
+
+  return [...candidates, ...persons];
 }
 
 // ---------------------------------------------------------------------
@@ -172,13 +235,106 @@ export type SocialMediaLink = {
   provenance: Provenance;
 };
 
+export type DeclaredAsset = {
+  id: number;
+  year: number;
+  assetType: string | null;
+  description: string | null;
+  valueCents: number;
+  sourceUpdatedAt: string | null;
+  provenance: Provenance;
+};
+
+// Patrimônio total declarado por ano de candidatura — soma simples, nominal
+// (sem deflação IPCA; ver ADs/politician.md §3). Um por ano em que a pessoa
+// foi candidata; anos sem candidatura simplesmente não aparecem.
+export type DeclaredAssetsYearSummary = { year: number; totalCents: number; count: number };
+
 export type FinanceSummary = {
   donationsCount: number;
   donationsTotalCents: number;
   expensesCount: number;
   expensesTotalCents: number;
   paymentsTotalCents: number;
+  // Part of donationsTotalCents, broken out by DS_FONTE_RECEITA: money from
+  // the FEFC (Fundo Especial de Financiamento de Campanha) or the older
+  // Fundo Partidário -- public electoral fund, as opposed to private
+  // donations/self-funding ("OUTROS RECURSOS"). Same source table, just a
+  // different slice -- see campaign_donation.source in schema.sql.
+  electoralFundTotalCents: number;
+  electoralFundCount: number;
 };
+
+export type CycleNode = {
+  cpfCnpj: string;
+  label: string;
+  type: "person" | "company";
+  personId: number | null;
+  photoUrl: string | null;
+};
+
+// circular_donations.py writes every cycle member into the explanation
+// prose as "CPF (nome)" (see _write_cycle_signal), even ones that never got
+// a signal_actor row (no matching people/companies row -- e.g. a donor cpf
+// never turned into a `people` record). That prose is the only complete,
+// ordered record of the cycle: signal_actor alone silently drops those
+// members. Parsing it back out is unusual, but it's the one source that
+// actually has all N nodes.
+const CYCLE_CHAIN_RE = /(\d{11}|\d{14}) \(([^)]*)\)/g;
+
+function parseCycleChain(explanation: string): CycleNode[] {
+  const parsed = Array.from(explanation.matchAll(CYCLE_CHAIN_RE)).map(([, cpfCnpj, label]) => ({
+    cpfCnpj,
+    label: label === "sem nome" ? "sem nome" : label,
+    type: (cpfCnpj.length === 14 ? "company" : "person") as "person" | "company",
+    personId: null as number | null,
+    photoUrl: null as string | null,
+  }));
+  // A cycle member is only ever a real candidate (photo-eligible) when
+  // their CPF has a `people` row -- same identity rule as lookupNodes.
+  const cpfs = parsed.filter((n) => n.type === "person").map((n) => n.cpfCnpj);
+  if (cpfs.length > 0) {
+    const placeholders = cpfs.map(() => "?").join(", ");
+    const rows = db()
+      .prepare(`SELECT id, cpf FROM people WHERE cpf IN (${placeholders})`)
+      .all(...cpfs) as Array<{ id: number; cpf: string }>;
+    const byCpf = new Map(rows.map((r) => [r.cpf, r.id]));
+    for (const n of parsed) n.personId = byCpf.get(n.cpfCnpj) ?? null;
+    const photoUrls = batchPhotoUrls(parsed.map((n) => n.personId).filter((id): id is number => id != null));
+    for (const n of parsed) if (n.personId != null) n.photoUrl = photoUrls.get(n.personId) ?? null;
+  }
+  return parsed;
+}
+
+// The signal only stores the cycle's TOTAL amount (elosys/rules/circular_
+// donations.py sums every edge before writing the signal) -- individual
+// edge amounts aren't persisted anywhere, so re-derive them the same way
+// the rule built the graph in the first place: donation edges resolve
+// donor -> candidate via campaign_org, expense edges resolve candidate ->
+// supplier the same way. Cheap (one pair of aggregate queries per edge),
+// and exact -- not the capped signal_evidence sample.
+export function getCycleEdgeAmounts(nodes: CycleNode[]): number[] {
+  const n = nodes.length;
+  if (n < 2) return [];
+  const donationStmt = db().prepare(
+    `SELECT coalesce(sum(d.amount_cents), 0) AS total
+     FROM campaign_donation d JOIN campaign_org co ON co.id = d.campaign_org_id
+     JOIN people p ON p.id = co.person_id
+     WHERE d.donor_cpf_cnpj = ? AND p.cpf = ?`
+  );
+  const expenseStmt = db().prepare(
+    `SELECT coalesce(sum(e.amount_cents), 0) AS total
+     FROM campaign_expense e JOIN campaign_org co ON co.id = e.campaign_org_id
+     JOIN people p ON p.id = co.person_id
+     WHERE p.cpf = ? AND e.supplier_cpf_cnpj = ?`
+  );
+  return nodes.map((from, i) => {
+    const to = nodes[(i + 1) % n];
+    const donation = (donationStmt.get(from.cpfCnpj, to.cpfCnpj) as { total: number }).total;
+    const expense = (expenseStmt.get(from.cpfCnpj, to.cpfCnpj) as { total: number }).total;
+    return donation + expense;
+  });
+}
 
 export type Signal = {
   id: number;
@@ -198,20 +354,39 @@ export type Signal = {
   // Present for circular_donations signals -- every cpf/cnpj in the cycle,
   // in order, for a "ver no grafo" link (/grafo?add=...).
   graphIds: string[] | null;
+  // Same cycle, but with names + type resolved, in order -- for an inline
+  // mini-graph instead of parsing the prose explanation.
+  cycleNodes: CycleNode[] | null;
+  cycleAmountCents: number | null;
+  cyclePathLength: number | null;
   aiReview: AiReviewBrief | null;
 };
 
-export type PersonProfile = {
+// ---------------------------------------------------------------------
+// Person profile — split into one function per section (instead of one
+// monolithic getPersonProfile) so the /politico/[id] page can wrap each
+// section in its own <Suspense> boundary and stream them in independently,
+// each with its own skeleton, rather than blocking the whole page on the
+// slowest query. getPersonHeader is the one exception: it's the fast,
+// year-independent identity lookup the page needs synchronously (for
+// notFound() and the immutable header), so it's never behind a boundary.
+// ---------------------------------------------------------------------
+
+export type PersonHeader = {
   person: Person;
-  candidacies: Candidacy[];
-  campaignOrgs: CampaignOrg[];
-  socialMedia: SocialMediaLink[];
-  finance: FinanceSummary;
-  signals: Signal[];
+  latestCandidacy: { year: number; office: string | null; partyAbbr: string | null; state: string | null } | null;
+  candidacyCount: number;
   signalsCount: number;
+  /** Name/CPF/título eleitoral/cargo shown in the page header all come from
+   * this one candidacy record (the person's most recent) -- `people` itself
+   * only backfills those fields from candidacy rows, it isn't its own
+   * source (see ADs/identidade.md). Null only for the handful of people with
+   * no politician_history row at all (shouldn't normally happen for a page
+   * that resolved by personId in the first place). */
+  provenance: Provenance | null;
 };
 
-export function getPersonProfile(personId: number): PersonProfile | null {
+export function getPersonHeader(personId: number): PersonHeader | null {
   const person = db()
     .prepare(
       `SELECT id, cpf, cpf_trusted AS cpfTrusted, voter_id AS voterId, canonical_name AS canonicalName
@@ -222,7 +397,92 @@ export function getPersonProfile(personId: number): PersonProfile | null {
     | undefined;
   if (!person) return null;
 
-  const candidacyRows = db()
+  const latest = db()
+    .prepare(
+      `SELECT t.year, t.office, t.party_abbr AS partyAbbr, t.state, ${PROVENANCE_COLUMNS}
+       FROM politician_history t
+       ${PROVENANCE_JOIN}
+       WHERE t.person_id = ?
+       ORDER BY t.year DESC, t.round DESC LIMIT 1`
+    )
+    .get(personId) as (Record<string, unknown> & { year: number; office: string | null; partyAbbr: string | null; state: string | null }) | undefined;
+
+  const candidacyCount = (
+    db().prepare("SELECT count(*) AS n FROM politician_history WHERE person_id = ?").get(personId) as { n: number }
+  ).n;
+  const signalsCount = (
+    db()
+      .prepare("SELECT count(DISTINCT signal_id) AS n FROM signal_actor WHERE type = 'person' AND actor_id = ?")
+      .get(personId) as { n: number }
+  ).n;
+
+  return {
+    person: {
+      id: person.id,
+      cpf: person.cpf,
+      cpfTrusted: !!person.cpfTrusted,
+      voterId: person.voterId,
+      canonicalName: person.canonicalName,
+    },
+    latestCandidacy: latest ? { year: latest.year, office: latest.office, partyAbbr: latest.partyAbbr, state: latest.state } : null,
+    candidacyCount,
+    signalsCount,
+    provenance: latest ? pickProvenance(latest) : null,
+  };
+}
+
+// Most recent official photo URL on file for a person, across every
+// candidacy year that has one (see elosys/tse/photo_urls.py) -- same
+// "latest snapshot wins" idea as the assets ranking fix, just for a photo
+// instead of a declared value. `hasTable` guards against running against a
+// .db built before this crawler existed. This is a direct TSE CDN URL
+// (divulgacandcontas.tse.jus.br) -- the browser hotlinks it straight from
+// <img src>, elosys never downloads or stores the image itself (see
+// schema.sql's note on candidate_photo for why).
+export function getPersonPhotoUrl(personId: number): string | null {
+  if (!hasTable("candidate_photo")) return null;
+  const row = db()
+    .prepare(`SELECT photo_url AS photoUrl FROM candidate_photo WHERE person_id = ? ORDER BY year DESC LIMIT 1`)
+    .get(personId) as { photoUrl: string } | undefined;
+  return row?.photoUrl ?? null;
+}
+
+// Provenance for that same photo_url row -- kept separate from
+// getPersonPhotoUrl (used all over: graph nodes, search results, rankings,
+// finance tables) so those callers don't pay for the extra provenance join
+// when they only ever show the <img>, not a source popup. Only the
+// político page's own header (see politico/[id]/page.tsx) wraps the photo
+// in a <SourceZone> and needs this.
+export function getPersonPhotoProvenance(personId: number): Provenance | null {
+  if (!hasTable("candidate_photo")) return null;
+  const row = db()
+    .prepare(
+      `SELECT ${PROVENANCE_COLUMNS} FROM candidate_photo t ${PROVENANCE_JOIN}
+       WHERE t.person_id = ? ORDER BY t.year DESC LIMIT 1`
+    )
+    .get(personId) as Record<string, unknown> | undefined;
+  return row ? pickProvenance(row) : null;
+}
+
+// Batch version of getPersonPhotoUrl, for callers building many nodes at
+// once (graph pages, search results) -- one query instead of N.
+function batchPhotoUrls(personIds: number[]): Map<number, string> {
+  const out = new Map<number, string>();
+  const ids = [...new Set(personIds)];
+  if (ids.length === 0 || !hasTable("candidate_photo")) return out;
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = db()
+    .prepare(
+      `SELECT person_id AS personId, photo_url AS photoUrl, max(year) AS year
+       FROM candidate_photo WHERE person_id IN (${placeholders}) GROUP BY person_id`
+    )
+    .all(...ids) as Array<{ personId: number; photoUrl: string; year: number }>;
+  for (const r of rows) out.set(r.personId, r.photoUrl);
+  return out;
+}
+
+export function getPersonCandidacies(personId: number): Candidacy[] {
+  const rows = db()
     .prepare(
       `SELECT t.id, t.year, t.election_type AS electionType, t.round,
               t.office, t.candidate_number AS candidateNumber,
@@ -242,7 +502,36 @@ export function getPersonProfile(personId: number): PersonProfile | null {
     )
     .all(personId) as Array<Record<string, unknown>>;
 
-  const campaignOrgRows = db()
+  return rows.map((r) => ({
+    id: r.id as number,
+    year: r.year as number,
+    electionType: (r.electionType as string) ?? null,
+    round: (r.round as number) ?? null,
+    office: (r.office as string) ?? null,
+    candidateNumber: (r.candidateNumber as string) ?? null,
+    partyAbbr: (r.partyAbbr as string) ?? null,
+    partyName: (r.partyName as string) ?? null,
+    state: (r.state as string) ?? null,
+    electoralUnit: (r.electoralUnit as string) ?? null,
+    municipality: (r.municipality as string) ?? null,
+    candidacyStatus: (r.candidacyStatus as string) ?? null,
+    candidacyStatusDetail: (r.candidacyStatusDetail as string) ?? null,
+    result: (r.result as string) ?? null,
+    ballotName: (r.ballotName as string) ?? null,
+    fullName: (r.fullName as string) ?? null,
+    birthDate: (r.birthDate as string) ?? null,
+    gender: (r.gender as string) ?? null,
+    education: (r.education as string) ?? null,
+    maritalStatus: (r.maritalStatus as string) ?? null,
+    race: (r.race as string) ?? null,
+    occupation: (r.occupation as string) ?? null,
+    tseCandidacyId: (r.tseCandidacyId as string) ?? null,
+    provenance: pickProvenance(r),
+  }));
+}
+
+export function getPersonCampaignOrgs(personId: number): CampaignOrg[] {
+  const rows = db()
     .prepare(
       `SELECT t.id, t.cnpj, t.year, t.office, t.party_abbr AS partyAbbr, t.state,
               ${PROVENANCE_COLUMNS}
@@ -253,7 +542,19 @@ export function getPersonProfile(personId: number): PersonProfile | null {
     )
     .all(personId) as Array<Record<string, unknown>>;
 
-  const socialMediaRows = db()
+  return rows.map((r) => ({
+    id: r.id as number,
+    cnpj: r.cnpj as string,
+    year: r.year as number,
+    office: (r.office as string) ?? null,
+    partyAbbr: (r.partyAbbr as string) ?? null,
+    state: (r.state as string) ?? null,
+    provenance: pickProvenance(r),
+  }));
+}
+
+export function getPersonSocialMedia(personId: number): SocialMediaLink[] {
+  const rows = db()
     .prepare(
       `SELECT t.id, t.year, t.platform, t.url, t.state,
               ${PROVENANCE_COLUMNS}
@@ -264,24 +565,331 @@ export function getPersonProfile(personId: number): PersonProfile | null {
     )
     .all(personId) as Array<Record<string, unknown>>;
 
-  // Money the person's campaign(s) received / paid — joined through campaign_org,
-  // since campaign_donation/campaign_expense carry the RECIPIENT's org, not a
-  // direct person_id (donor_person_id / supplier_person_id is the OTHER side).
+  return rows.map((r) => ({
+    id: r.id as number,
+    year: r.year as number,
+    platform: r.platform as string,
+    url: r.url as string,
+    state: (r.state as string) ?? null,
+    provenance: pickProvenance(r),
+  }));
+}
+
+// Bens declarados no registro da candidatura (ADs/politician.md §3) — um bem
+// por linha, nominal (sem deflação IPCA, guardado como veio), nunca
+// "patrimônio atual". Ainda não existe uma regra de "enriquecimento
+// incompatível" sobre isso (só a base pra uma futura) — aqui é só o dado
+// bruto declarado, com proveniência, sem interpretação nenhuma.
+export function getPersonAssets(
+  personId: number
+): { declaredAssets: DeclaredAsset[]; declaredAssetsByYear: DeclaredAssetsYearSummary[] } {
+  const rows = db()
+    .prepare(
+      `SELECT t.id, t.year, t.asset_type AS assetType, t.description,
+              t.value_cents AS valueCents, t.source_updated_at AS sourceUpdatedAt,
+              ${PROVENANCE_COLUMNS}
+       FROM declared_assets t
+       ${PROVENANCE_JOIN}
+       WHERE t.person_id = ?
+       ORDER BY t.year DESC, t.value_cents DESC`
+    )
+    .all(personId) as Array<Record<string, unknown>>;
+
+  return {
+    declaredAssets: rows.map((r) => ({
+      id: r.id as number,
+      year: r.year as number,
+      assetType: (r.assetType as string) ?? null,
+      description: (r.description as string) ?? null,
+      valueCents: (r.valueCents as number) ?? 0,
+      sourceUpdatedAt: (r.sourceUpdatedAt as string) ?? null,
+      provenance: pickProvenance(r),
+    })),
+    declaredAssetsByYear: Object.values(
+      rows.reduce<Record<number, DeclaredAssetsYearSummary>>((acc, r) => {
+        const y = r.year as number;
+        const cents = (r.valueCents as number) ?? 0;
+        acc[y] ??= { year: y, totalCents: 0, count: 0 };
+        acc[y].totalCents += cents;
+        acc[y].count += 1;
+        return acc;
+      }, {})
+    ).sort((a, b) => a.year - b.year),
+  };
+}
+
+export type ParliamentaryEarmark = {
+  id: number;
+  earmarkCode: string;
+  year: number;
+  earmarkType: string | null;
+  locality: string | null;
+  state: string | null;
+  municipality: string | null;
+  functionName: string | null;
+  actionName: string | null;
+  committedCents: number | null;
+  paidCents: number | null;
+  provenance: Provenance;
+};
+
+// Emendas parlamentares AUTORADAS pela pessoa (ver ADs/dados_derivados.md e
+// elosys/transparencia/earmarks.py) — author_person_id é um match por NOME
+// (a fonte não tem CPF do autor), nunca uma identidade confirmada; só
+// deputados federais e senadores autoram emenda, então isto fica vazio pra
+// qualquer outro cargo. hasTable() protege quem ainda não rodou o crawler.
+export function getPersonEarmarks(
+  personId: number
+): { earmarks: ParliamentaryEarmark[]; totalCommittedCents: number; totalPaidCents: number } {
+  if (!hasTable("parliamentary_earmark")) {
+    return { earmarks: [], totalCommittedCents: 0, totalPaidCents: 0 };
+  }
+  const rows = db()
+    .prepare(
+      `SELECT t.id, t.earmark_code AS earmarkCode, t.year, t.earmark_type AS earmarkType,
+              t.locality, t.state, t.municipality, t.function_name AS functionName,
+              t.action_name AS actionName, t.committed_cents AS committedCents,
+              t.paid_cents AS paidCents,
+              ${PROVENANCE_COLUMNS}
+       FROM parliamentary_earmark t
+       ${PROVENANCE_JOIN}
+       WHERE t.author_person_id = ?
+       ORDER BY t.year DESC, t.committed_cents DESC`
+    )
+    .all(personId) as Array<Record<string, unknown>>;
+
+  const earmarks = rows.map((r) => ({
+    id: r.id as number,
+    earmarkCode: r.earmarkCode as string,
+    year: r.year as number,
+    earmarkType: (r.earmarkType as string) ?? null,
+    locality: (r.locality as string) ?? null,
+    state: (r.state as string) ?? null,
+    municipality: (r.municipality as string) ?? null,
+    functionName: (r.functionName as string) ?? null,
+    actionName: (r.actionName as string) ?? null,
+    committedCents: (r.committedCents as number) ?? null,
+    paidCents: (r.paidCents as number) ?? null,
+    provenance: pickProvenance(r),
+  }));
+
+  return {
+    earmarks,
+    totalCommittedCents: earmarks.reduce((s, e) => s + (e.committedCents ?? 0), 0),
+    totalPaidCents: earmarks.reduce((s, e) => s + (e.paidCents ?? 0), 0),
+  };
+}
+
+export type CompanyEarmark = {
+  earmarkCode: string;
+  earmarkYear: number | null;
+  authorName: string | null;
+  authorPersonId: number | null;
+  amountCents: number;
+  monthsCount: number;
+  state: string | null;
+  municipality: string | null;
+};
+
+// The other side of getPersonEarmarks: emendas that named THIS cnpj as
+// favorecido (parliamentary_earmark_beneficiary), grouped by emenda since
+// the source publishes one row per month paid, not one per emenda -- a
+// company funded across 12 months would otherwise show as 12 near-duplicate
+// rows. `authorPersonId` comes from the SAME name-match as getPersonEarmarks
+// (parliamentary_earmark.author_person_id) -- still a "provável" link, not
+// a confirmed identity.
+export function getCompanyEarmarks(cnpj: string): { earmarks: CompanyEarmark[]; totalCents: number } {
+  if (!hasTable("parliamentary_earmark_beneficiary")) return { earmarks: [], totalCents: 0 };
+  const rows = db()
+    .prepare(
+      // Two steps, deliberately not one JOIN-then-GROUP: `earmark_code` is
+      // NOT unique in `parliamentary_earmark` (its own natural key is
+      // earmark_code+year+locality -- an old emenda with no real code on
+      // file shares the sentinel "Sem informação" across thousands of rows).
+      // Aggregating `t` first, then joining one representative parliamentary_earmark
+      // row per code, avoids a fan-out that would multiply amountCents by
+      // however many parliamentary_earmark rows share that code. Rows still
+      // stuck on the sentinel code are excluded outright -- lumping
+      // thousands of unrelated old emendas into one fake "earmark" would be
+      // worse than just not showing them.
+      `WITH agg AS (
+         SELECT earmark_code, sum(amount_cents) AS amountCents, count(*) AS monthsCount,
+                min(state) AS state, min(municipality) AS municipality
+         FROM parliamentary_earmark_beneficiary
+         WHERE beneficiary_doc = ? AND earmark_code != 'Sem informação'
+         GROUP BY earmark_code
+       ),
+       author AS (
+         SELECT earmark_code, author_name, author_person_id, year,
+                row_number() OVER (PARTITION BY earmark_code ORDER BY id) AS rn
+         FROM parliamentary_earmark
+       )
+       SELECT agg.earmark_code AS earmarkCode, agg.amountCents, agg.monthsCount, agg.state, agg.municipality,
+              author.author_name AS authorName, author.author_person_id AS authorPersonId, author.year AS earmarkYear
+       FROM agg
+       LEFT JOIN author ON author.earmark_code = agg.earmark_code AND author.rn = 1
+       ORDER BY agg.amountCents DESC`
+    )
+    .all(cnpj) as Array<Record<string, unknown>>;
+
+  const earmarks = rows.map((r) => ({
+    earmarkCode: r.earmarkCode as string,
+    earmarkYear: (r.earmarkYear as number) ?? null,
+    authorName: (r.authorName as string) ?? null,
+    authorPersonId: (r.authorPersonId as number) ?? null,
+    amountCents: r.amountCents as number,
+    monthsCount: r.monthsCount as number,
+    state: (r.state as string) ?? null,
+    municipality: (r.municipality as string) ?? null,
+  }));
+
+  return { earmarks, totalCents: earmarks.reduce((s, e) => s + e.amountCents, 0) };
+}
+
+export type EarmarkPaymentRow = {
+  earmarkCode: string;
+  year: number | null;
+  authorName: string | null;
+  authorPersonId: number | null;
+  authorPhotoUrl: string | null;
+  companyName: string | null;
+  companyCnpj: string;
+  amountCents: number;
+};
+
+export type EarmarkPaymentPage = { rows: EarmarkPaymentRow[]; total: number };
+
+export const EARMARK_PAGE_SIZE = 50;
+
+/** Plain listing, not a detection rule: "quem fez, quanto, pra qual
+ * empresa" — every emenda whose favorecido is a Pessoa Jurídica, one row
+ * per (emenda, empresa) pair (months already summed -- see the fan-out
+ * note on getCompanyEarmarks, same fix applies here). No severity, no
+ * signal_actor/signal_evidence: this is Portal da Transparência data shown
+ * as-is, not something our own code flagged as unusual. */
+export function getEarmarkPayments(opts: {
+  page?: number;
+  q?: string;
+  order?: "asc" | "desc";
+}): EarmarkPaymentPage {
+  if (!hasTable("parliamentary_earmark_beneficiary")) return { rows: [], total: 0 };
+  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  const offset = (page - 1) * EARMARK_PAGE_SIZE;
+  const sortDir = opts.order === "asc" ? "ASC" : "DESC";
+  const q = opts.q?.trim() ?? "";
+
+  // Banco do Brasil / Caixa / BNDES are the federal government's own
+  // payment rails -- almost every emenda above a certain size gets routed
+  // THROUGH one of them before reaching the real recipient, so they'd
+  // otherwise fill the entire top of this list with numbers that don't mean
+  // "this company profited", just "this bank moved money". Excluded by
+  // CNPJ, not by any inferred category, since that's the one thing that's
+  // unambiguous here.
+  const PASSTHROUGH_CNPJS = ["00000000000191", "00360305000104", "00038166000105"];
+  // The source types these as "Pessoa Jurídica" too (they have a real CNPJ),
+  // but they're government bodies -- funds, ministries, states/municípios,
+  // legislative houses -- not a company anyone could say "profited". Name
+  // prefixes, not a legal_nature lookup: legal_nature isn't populated for
+  // most of these (receita/cnpj.py only enriches CNPJs that show up in
+  // campaign finance, which most public bodies never do), but Brazilian
+  // government entity names are standardized enough that this catches the
+  // overwhelming majority.
+  const GOV_NAME_PATTERNS = [
+    "MUNICIPIO D%", "ESTADO D%", "PREFEITURA%", "GOVERNO D%", "CAMARA MUNICIPAL%",
+    "ASSEMBLEIA LEGISLATIVA%", "UNIAO FEDERAL%", "%MINISTERIO%", "%SECRETARIA%",
+    "%FUNDO ESTADUAL%", "%FUNDO MUNICIPAL%", "%FUNDO NACIONAL%", "%FUNDO ESPECIAL%",
+    "%FUNDO DE SAUDE%", "%DEPARTAMENTO DE ESTRADAS%",
+    "CONSORCIO INTERFEDERATIVO%", "CONSORCIO PUBLICO%", "CONSORCIO INTERMUNICIPAL%",
+  ];
+
+  const CTE = `
+    WITH agg AS (
+      SELECT earmark_code, beneficiary_doc, beneficiary_name, sum(amount_cents) AS amountCents
+      FROM parliamentary_earmark_beneficiary
+      WHERE beneficiary_type LIKE 'Pessoa Jur%' AND earmark_code != 'Sem informação'
+        AND beneficiary_doc NOT IN (${PASSTHROUGH_CNPJS.map(() => "?").join(", ")})
+        AND ${GOV_NAME_PATTERNS.map(() => "beneficiary_name NOT LIKE ?").join(" AND ")}
+      GROUP BY earmark_code, beneficiary_doc
+    ),
+    author AS (
+      SELECT earmark_code, author_name, author_person_id, year,
+             row_number() OVER (PARTITION BY earmark_code ORDER BY id) AS rn
+      FROM parliamentary_earmark
+    ),
+    joined AS (
+      SELECT agg.earmark_code AS earmarkCode, agg.beneficiary_doc AS companyCnpj,
+             agg.beneficiary_name AS companyName, agg.amountCents,
+             author.author_name AS authorName, author.author_person_id AS authorPersonId,
+             author.year AS year
+      FROM agg
+      LEFT JOIN author ON author.earmark_code = agg.earmark_code AND author.rn = 1
+    )
+  `;
+  const where = q ? "WHERE companyName LIKE ? OR authorName LIKE ?" : "";
+  const qArgs = q ? [`%${q}%`, `%${q}%`] : [];
+
+  const cteArgs = [...PASSTHROUGH_CNPJS, ...GOV_NAME_PATTERNS];
+  const total = (
+    db().prepare(`${CTE} SELECT count(*) AS n FROM joined ${where}`).get(...cteArgs, ...qArgs) as { n: number }
+  ).n;
+  const rows = db()
+    .prepare(
+      `${CTE} SELECT * FROM joined ${where} ORDER BY amountCents ${sortDir} LIMIT ? OFFSET ?`
+    )
+    .all(...cteArgs, ...qArgs, EARMARK_PAGE_SIZE, offset) as Array<Record<string, unknown>>;
+
+  const photoUrls = batchPhotoUrls(
+    rows.map((r) => r.authorPersonId as number | null).filter((id): id is number => id != null)
+  );
+
+  return {
+    total,
+    rows: rows.map((r) => ({
+      earmarkCode: r.earmarkCode as string,
+      year: (r.year as number) ?? null,
+      authorName: (r.authorName as string) ?? null,
+      authorPersonId: (r.authorPersonId as number) ?? null,
+      authorPhotoUrl: r.authorPersonId != null ? (photoUrls.get(r.authorPersonId as number) ?? null) : null,
+      companyName: (r.companyName as string) ?? null,
+      companyCnpj: r.companyCnpj as string,
+      amountCents: r.amountCents as number,
+    })),
+  };
+}
+
+// Money the person's campaign(s) received / paid — joined through
+// campaign_org, since campaign_donation/campaign_expense carry the
+// RECIPIENT's org, not a direct person_id. `year` omitted (or undefined)
+// means all-time — that's the "overview geral" shown up top, unaffected by
+// the year dropdown; passing a year is what the "finanças de campanha"
+// section further down uses once the user picks one.
+export function getPersonFinance(personId: number, year?: number): FinanceSummary {
+  const yearClause = year != null ? " AND t.year = ?" : "";
+  const yearArgs = year != null ? [year] : [];
+
   const donationsAgg = db()
     .prepare(
       `SELECT count(*) AS n, coalesce(sum(t.amount_cents), 0) AS total
        FROM campaign_donation t JOIN campaign_org co ON co.id = t.campaign_org_id
-       WHERE co.person_id = ?`
+       WHERE co.person_id = ?${yearClause}`
     )
-    .get(personId) as { n: number; total: number };
+    .get(personId, ...yearArgs) as { n: number; total: number };
 
   const expensesAgg = db()
     .prepare(
       `SELECT count(*) AS n, coalesce(sum(t.amount_cents), 0) AS total
        FROM campaign_expense t JOIN campaign_org co ON co.id = t.campaign_org_id
-       WHERE co.person_id = ?`
+       WHERE co.person_id = ?${yearClause}`
     )
-    .get(personId) as { n: number; total: number };
+    .get(personId, ...yearArgs) as { n: number; total: number };
+
+  const electoralFundAgg = db()
+    .prepare(
+      `SELECT count(*) AS n, coalesce(sum(t.amount_cents), 0) AS total
+       FROM campaign_donation t JOIN campaign_org co ON co.id = t.campaign_org_id
+       WHERE co.person_id = ? AND t.source IN ('FUNDO ESPECIAL', 'FUNDO PARTIDARIO')${yearClause}`
+    )
+    .get(personId, ...yearArgs) as { n: number; total: number };
 
   const paymentsAgg = db()
     .prepare(
@@ -289,26 +897,34 @@ export function getPersonProfile(personId: number): PersonProfile | null {
        FROM campaign_expense_payment p
        JOIN campaign_expense ce ON ce.id = p.campaign_expense_id
        JOIN campaign_org co ON co.id = ce.campaign_org_id
-       WHERE co.person_id = ?`
+       WHERE co.person_id = ?${year != null ? " AND ce.year = ?" : ""}`
     )
-    .get(personId) as { total: number };
+    .get(personId, ...yearArgs) as { total: number };
 
   // Full donation/expense lists are served paginated + searchable by
   // /api/finance -> getFinancePage (see <FinanceTable>), not baked in here.
 
-  // Signals (see ADs/dados_derivados.md) never come from a source — they're
-  // produced by our own rule code over data already in the DB. A person can
-  // be named as either the candidate whose campaign spent the money or the
-  // supplier who got paid; role tells them apart. One row per signal --
-  // deliberately NOT joined to signal_evidence here: a circular_donations
-  // signal can have many evidence rows, which would multiply this signal
-  // into duplicate rows. Per-type detail (expense line, cycle actors) is
-  // fetched separately below, keyed by signal id.
+  return {
+    donationsCount: donationsAgg.n,
+    donationsTotalCents: donationsAgg.total,
+    expensesCount: expensesAgg.n,
+    expensesTotalCents: expensesAgg.total,
+    paymentsTotalCents: paymentsAgg.total,
+    electoralFundTotalCents: electoralFundAgg.total,
+    electoralFundCount: electoralFundAgg.n,
+  };
+}
+
+// Signals (see ADs/dados_derivados.md) never come from a source — they're
+// produced by our own rule code over data already in the DB. A person can be
+// named as either the candidate whose campaign spent the money or the
+// supplier who got paid; role tells them apart.
+export function getPersonSignals(personId: number): { signals: Signal[]; signalsCount: number } {
   const signalRows = db()
     .prepare(
       `SELECT s.id, s.type, s.severity, s.explanation, sa.role,
               rr.rule, rr.rule_version AS ruleVersion,
-              s.amount_cents AS amountCents,
+              s.amount_cents AS amountCents, s.path_length AS pathLength,
               ar.verdict AS aiVerdict, ar.confidence AS aiConfidence,
               ar.explanation AS aiExplanation, ar.model AS aiModel
        FROM signal_actor sa
@@ -350,82 +966,24 @@ export function getPersonProfile(personId: number): PersonProfile | null {
          FROM signal_actor sa
          LEFT JOIN people p ON sa.type = 'person' AND p.id = sa.actor_id
          LEFT JOIN companies c ON sa.type = 'company' AND c.id = sa.actor_id
-         WHERE sa.signal_id IN (${ph})`
+         WHERE sa.signal_id IN (${ph})
+         ORDER BY sa.rowid`
       )
       .all(...cycleSignalIds) as Array<{ signalId: number; cpfCnpj: string | null }>) {
       if (!row.cpfCnpj) continue;
-      const list = graphIdsBySignal.get(row.signalId) ?? [];
-      list.push(row.cpfCnpj);
-      graphIdsBySignal.set(row.signalId, list);
+      const ids = graphIdsBySignal.get(row.signalId) ?? [];
+      ids.push(row.cpfCnpj);
+      graphIdsBySignal.set(row.signalId, ids);
     }
   }
 
   const signalsCount = (
     db()
-      .prepare(
-        "SELECT count(DISTINCT signal_id) AS n FROM signal_actor WHERE type = 'person' AND actor_id = ?"
-      )
+      .prepare("SELECT count(DISTINCT signal_id) AS n FROM signal_actor WHERE type = 'person' AND actor_id = ?")
       .get(personId) as { n: number }
   ).n;
 
   return {
-    person: {
-      id: person.id,
-      cpf: person.cpf,
-      cpfTrusted: !!person.cpfTrusted,
-      voterId: person.voterId,
-      canonicalName: person.canonicalName,
-    },
-    candidacies: candidacyRows.map((r) => ({
-      id: r.id as number,
-      year: r.year as number,
-      electionType: (r.electionType as string) ?? null,
-      round: (r.round as number) ?? null,
-      office: (r.office as string) ?? null,
-      candidateNumber: (r.candidateNumber as string) ?? null,
-      partyAbbr: (r.partyAbbr as string) ?? null,
-      partyName: (r.partyName as string) ?? null,
-      state: (r.state as string) ?? null,
-      electoralUnit: (r.electoralUnit as string) ?? null,
-      municipality: (r.municipality as string) ?? null,
-      candidacyStatus: (r.candidacyStatus as string) ?? null,
-      candidacyStatusDetail: (r.candidacyStatusDetail as string) ?? null,
-      result: (r.result as string) ?? null,
-      ballotName: (r.ballotName as string) ?? null,
-      fullName: (r.fullName as string) ?? null,
-      birthDate: (r.birthDate as string) ?? null,
-      gender: (r.gender as string) ?? null,
-      education: (r.education as string) ?? null,
-      maritalStatus: (r.maritalStatus as string) ?? null,
-      race: (r.race as string) ?? null,
-      occupation: (r.occupation as string) ?? null,
-      tseCandidacyId: (r.tseCandidacyId as string) ?? null,
-      provenance: pickProvenance(r),
-    })),
-    campaignOrgs: campaignOrgRows.map((r) => ({
-      id: r.id as number,
-      cnpj: r.cnpj as string,
-      year: r.year as number,
-      office: (r.office as string) ?? null,
-      partyAbbr: (r.partyAbbr as string) ?? null,
-      state: (r.state as string) ?? null,
-      provenance: pickProvenance(r),
-    })),
-    socialMedia: socialMediaRows.map((r) => ({
-      id: r.id as number,
-      year: r.year as number,
-      platform: r.platform as string,
-      url: r.url as string,
-      state: (r.state as string) ?? null,
-      provenance: pickProvenance(r),
-    })),
-    finance: {
-      donationsCount: donationsAgg.n,
-      donationsTotalCents: donationsAgg.total,
-      expensesCount: expensesAgg.n,
-      expensesTotalCents: expensesAgg.total,
-      paymentsTotalCents: paymentsAgg.total,
-    },
     signals: signalRows.map((r) => {
       const id = r.id as number;
       const expenseRow = expenseBySignal.get(id);
@@ -445,6 +1003,9 @@ export function getPersonProfile(personId: number): PersonProfile | null {
           supplierName: (expenseRow.supplierName as string) ?? null,
         } : null,
         graphIds: graphIdsBySignal.get(id) ?? null,
+        cycleNodes: r.rule === "circular_donations" ? parseCycleChain(r.explanation as string) : null,
+        cycleAmountCents: r.rule === "circular_donations" ? ((r.amountCents as number) ?? null) : null,
+        cyclePathLength: r.rule === "circular_donations" ? ((r.pathLength as number) ?? null) : null,
         aiReview: r.aiVerdict
           ? {
               verdict: r.aiVerdict as AiVerdict,
@@ -482,6 +1043,231 @@ export function getExpenseYears(): number[] {
     .all() as Array<{ year: number }>;
   cachedExpenseYears = rows.map((r) => r.year);
   return cachedExpenseYears;
+}
+
+let cachedAssetYears: number[] | null = null;
+
+/** Years that have a `bem_candidato` declaration -- broader than
+ * getExpenseYears (2014-2026, ADs/politician.md §3, vs. 2018-2026 for
+ * campaign finance), so kept separate rather than reused. */
+export function getAssetYears(): number[] {
+  if (cachedAssetYears) return cachedAssetYears;
+  const rows = db()
+    .prepare("SELECT DISTINCT year FROM declared_assets ORDER BY year DESC")
+    .all() as Array<{ year: number }>;
+  cachedAssetYears = rows.map((r) => r.year);
+  return cachedAssetYears;
+}
+
+export type AssetsRankingRow = {
+  personId: number;
+  name: string | null;
+  assetCount: number;
+  assetTotalCents: number;
+  office: string | null;
+  partyAbbr: string | null;
+  state: string | null;
+  year: number | null;
+  photoUrl: string | null;
+};
+
+export type AssetsRankingPage = { rows: AssetsRankingRow[]; total: number };
+
+/** Ranks candidates by total declared value -- see ADs/politician.md §3.
+ * `year` scopes to one candidacy's declaration; with no year, it's each
+ * person's single most recent declaration (see the note on `latestYearJoin`
+ * below -- summing across years would double-count the same wealth). */
+export function getAssetsRanking(opts: {
+  year?: number;
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}): AssetsRankingPage {
+  const limit = opts.limit ?? 50;
+  const offset = opts.offset ?? 0;
+  const sortDir = opts.order === "asc" ? "ASC" : "DESC";
+  const yearArgs = opts.year != null ? [opts.year] : [];
+
+  // Each bem_candidato row is a full snapshot of what the person declared
+  // owning AT THAT CANDIDACY — not a delta. So "todos os anos" can't sum
+  // every year's rows together (that would add a 2020 declaration on top of
+  // a 2024 one, as if both piles of assets still existed at once). Instead
+  // it takes, per person, only their single MOST RECENT year with any
+  // declared_assets row — the latest self-reported snapshot — same as
+  // filtering to one explicit year just does for that year directly.
+  const latestYearJoin = opts.year != null
+    ? "" // a specific year is already exactly one snapshot per person
+    : `JOIN (
+         SELECT person_id, max(year) AS year
+         FROM declared_assets
+         WHERE person_id IS NOT NULL
+         GROUP BY person_id
+       ) latest ON latest.person_id = da.person_id AND latest.year = da.year`;
+  const yearWhere = opts.year != null ? "WHERE da.year = ? AND da.person_id IS NOT NULL" : "WHERE da.person_id IS NOT NULL";
+
+  const total = (
+    db()
+      .prepare(
+        `SELECT count(*) AS n FROM (
+           SELECT da.person_id FROM declared_assets da ${latestYearJoin} ${yearWhere}
+           GROUP BY da.person_id
+         )`
+      )
+      .get(...yearArgs) as { n: number }
+  ).n;
+
+  const rows = db()
+    .prepare(
+      `WITH agg AS (
+         SELECT da.person_id, count(*) AS assetCount, coalesce(sum(da.value_cents), 0) AS assetTotalCents
+         FROM declared_assets da
+         ${latestYearJoin}
+         ${yearWhere}
+         GROUP BY da.person_id
+       )
+       SELECT a.person_id AS personId, p.canonical_name AS name, a.assetCount, a.assetTotalCents,
+              ph.office, ph.party_abbr AS partyAbbr, ph.state, ph.year
+       FROM agg a
+       JOIN people p ON p.id = a.person_id
+       LEFT JOIN politician_history ph ON ph.id = (
+         -- Join on the unique history row id, not (person_id, year) -- a
+         -- person can have more than one candidacy row in the same year
+         -- (different office/round), which would otherwise fan out this
+         -- LEFT JOIN and duplicate the person in the ranking.
+         SELECT ph2.id FROM politician_history ph2
+         WHERE ph2.person_id = a.person_id${opts.year != null ? " AND ph2.year = ?" : ""}
+         ORDER BY ph2.year DESC, ph2.id DESC
+         LIMIT 1
+       )
+       ORDER BY a.assetTotalCents ${sortDir}
+       LIMIT ? OFFSET ?`
+    )
+    .all(...yearArgs, ...yearArgs, limit, offset) as Array<Record<string, unknown>>;
+
+  const photoUrls = batchPhotoUrls(rows.map((r) => r.personId as number));
+  return {
+    total,
+    rows: rows.map((r) => ({
+      personId: r.personId as number,
+      name: (r.name as string) ?? null,
+      assetCount: r.assetCount as number,
+      assetTotalCents: r.assetTotalCents as number,
+      office: (r.office as string) ?? null,
+      partyAbbr: (r.partyAbbr as string) ?? null,
+      state: (r.state as string) ?? null,
+      year: (r.year as number) ?? null,
+      photoUrl: photoUrls.get(r.personId as number) ?? null,
+    })),
+  };
+}
+
+export type AssetsGrowthRow = {
+  personId: number;
+  name: string | null;
+  office: string | null;
+  partyAbbr: string | null;
+  state: string | null;
+  firstYear: number;
+  lastYear: number;
+  firstCents: number;
+  lastCents: number;
+  growthCents: number;
+  /** null when firstCents <= 0 (a % change from zero/negative is meaningless). */
+  growthPct: number | null;
+  photoUrl: string | null;
+};
+
+export type AssetsGrowthPage = { rows: AssetsGrowthRow[]; total: number };
+
+/** Ranks candidates by how much their declared patrimônio grew between
+ * their EARLIEST and LATEST candidacy with a bem_candidato declaration --
+ * the same "one snapshot per year, not a delta" reading as getAssetsRanking,
+ * just compared across the two ends of a person's history instead of taken
+ * at one point. Requires at least 2 distinct declaration years; someone with
+ * only one never has a "crescimento" to speak of. Ranked by the absolute
+ * cents delta (not %), since a 500% jump from R$200 is not what "maior
+ * crescimento" means here -- % is still returned for display. */
+export function getAssetsGrowthRanking(opts: {
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}): AssetsGrowthPage {
+  const limit = opts.limit ?? 50;
+  const offset = opts.offset ?? 0;
+  const sortDir = opts.order === "asc" ? "ASC" : "DESC";
+
+  const CTE = `
+    WITH bounds AS (
+      SELECT person_id, min(year) AS firstYear, max(year) AS lastYear
+      FROM declared_assets
+      WHERE person_id IS NOT NULL
+      GROUP BY person_id
+      HAVING count(DISTINCT year) >= 2
+    ),
+    first_total AS (
+      SELECT da.person_id, coalesce(sum(da.value_cents), 0) AS totalCents
+      FROM declared_assets da JOIN bounds b ON b.person_id = da.person_id AND da.year = b.firstYear
+      GROUP BY da.person_id
+    ),
+    last_total AS (
+      SELECT da.person_id, coalesce(sum(da.value_cents), 0) AS totalCents
+      FROM declared_assets da JOIN bounds b ON b.person_id = da.person_id AND da.year = b.lastYear
+      GROUP BY da.person_id
+    ),
+    growth AS (
+      SELECT b.person_id, b.firstYear, b.lastYear, f.totalCents AS firstCents, l.totalCents AS lastCents,
+             (l.totalCents - f.totalCents) AS growthCents
+      FROM bounds b
+      JOIN first_total f ON f.person_id = b.person_id
+      JOIN last_total l ON l.person_id = b.person_id
+    )
+  `;
+
+  const total = (
+    db().prepare(`${CTE} SELECT count(*) AS n FROM growth`).get() as { n: number }
+  ).n;
+
+  const rows = db()
+    .prepare(
+      `${CTE}
+       SELECT g.person_id AS personId, p.canonical_name AS name, g.firstYear, g.lastYear,
+              g.firstCents, g.lastCents, g.growthCents,
+              ph.office, ph.party_abbr AS partyAbbr, ph.state
+       FROM growth g
+       JOIN people p ON p.id = g.person_id
+       LEFT JOIN politician_history ph ON ph.id = (
+         SELECT ph2.id FROM politician_history ph2
+         WHERE ph2.person_id = g.person_id
+         ORDER BY ph2.year DESC, ph2.id DESC
+         LIMIT 1
+       )
+       ORDER BY g.growthCents ${sortDir}
+       LIMIT ? OFFSET ?`
+    )
+    .all(limit, offset) as Array<Record<string, unknown>>;
+
+  const photoUrls = batchPhotoUrls(rows.map((r) => r.personId as number));
+  return {
+    total,
+    rows: rows.map((r) => {
+      const firstCents = r.firstCents as number;
+      const lastCents = r.lastCents as number;
+      return {
+        personId: r.personId as number,
+        name: (r.name as string) ?? null,
+        office: (r.office as string) ?? null,
+        partyAbbr: (r.partyAbbr as string) ?? null,
+        state: (r.state as string) ?? null,
+        firstYear: r.firstYear as number,
+        lastYear: r.lastYear as number,
+        firstCents,
+        lastCents,
+        growthCents: r.growthCents as number,
+        growthPct: firstCents > 0 ? ((lastCents - firstCents) / firstCents) * 100 : null,
+        photoUrl: photoUrls.get(r.personId as number) ?? null,
+      };
+    }),
+  };
 }
 
 export function getTopSuppliers(year: number | null, limit = 10): TopSupplier[] {
@@ -581,7 +1367,8 @@ export function candidatePersonId(cpfCnpj: string): number | null {
   return row?.id ?? null;
 }
 
-export function getEntityProfile(cpfCnpj: string): EntityProfile | null {
+export function getEntityProfile(cpfCnpj: string, opts: { year?: number } = {}): EntityProfile | null {
+  const { year } = opts;
   const digits = digitsOnly(cpfCnpj);
   if (digits.length !== 11 && digits.length !== 14) return null;
   const isCompany = digits.length === 14;
@@ -648,29 +1435,36 @@ export function getEntityProfile(cpfCnpj: string): EntityProfile | null {
     }
   }
 
+  const entityYearClause = year != null ? " AND year = ?" : "";
+  const entityYearArgs = year != null ? [year] : [];
+
   const donationsAgg = db()
     .prepare(
       `SELECT count(*) AS n, coalesce(sum(amount_cents), 0) AS total
-       FROM campaign_donation WHERE donor_cpf_cnpj = ?`
+       FROM campaign_donation WHERE donor_cpf_cnpj = ?${entityYearClause}`
     )
-    .get(digits) as { n: number; total: number };
+    .get(digits, ...entityYearArgs) as { n: number; total: number };
 
   const paymentsAgg = db()
     .prepare(
       `SELECT count(*) AS n, coalesce(sum(amount_cents), 0) AS total
-       FROM campaign_expense WHERE supplier_cpf_cnpj = ?`
+       FROM campaign_expense WHERE supplier_cpf_cnpj = ?${entityYearClause}`
     )
-    .get(digits) as { n: number; total: number };
+    .get(digits, ...entityYearArgs) as { n: number; total: number };
 
   // No hits anywhere in the system -> a dead-end page, not worth rendering.
-  if (
-    donationsAgg.n === 0 && paymentsAgg.n === 0 &&
-    personId === null && companyKind === null && registry === null
-  ) {
-    const hasSanction = db()
-      .prepare("SELECT 1 FROM sanction WHERE cpf_cnpj = ? LIMIT 1")
-      .get(digits);
-    if (!hasSanction) return null;
+  // Checked WITHOUT the year filter — a candidate/company that only has
+  // activity in a different year is still a real page, just empty for the
+  // year the caller asked about.
+  if (personId === null && companyKind === null && registry === null) {
+    const hasDonation = db().prepare("SELECT 1 FROM campaign_donation WHERE donor_cpf_cnpj = ? LIMIT 1").get(digits);
+    const hasPayment = db().prepare("SELECT 1 FROM campaign_expense WHERE supplier_cpf_cnpj = ? LIMIT 1").get(digits);
+    if (!hasDonation && !hasPayment) {
+      const hasSanction = db()
+        .prepare("SELECT 1 FROM sanction WHERE cpf_cnpj = ? LIMIT 1")
+        .get(digits);
+      if (!hasSanction) return null;
+    }
   }
 
   // The donation/payment lists themselves are served paginated + searchable
@@ -731,6 +1525,13 @@ export type FinanceRow = {
   counterpartyPersonId: number | null;
   counterpartyOpenedAt: string | null; // company opening date (Receita), when the counterparty is an enriched CNPJ
   detail: string | null;
+  /** true when the counterparty CNPJ has a sócio who is also a candidate
+   * (candidate_supplier_partner — see ADs/dados_derivados.md). Only set on
+   * the candidate-scope tables (a company as donor/fornecedor); entity-scope
+   * rows already point straight at the politician via counterpartyPersonId. */
+  counterpartyIsPoliticianOwned: boolean;
+  counterpartyPhotoUrl: string | null;
+  provenance: Provenance;
 };
 
 export type FinancePage = { rows: FinanceRow[]; total: number; pageSize: number };
@@ -747,6 +1548,19 @@ export type FinanceQuery = {
   q?: string;
   sort?: FinanceSort;
   order?: "asc" | "desc";
+  year?: number;
+  dateFrom?: string; // 'YYYY-MM-DD', inclusive
+  dateTo?: string; // 'YYYY-MM-DD', inclusive
+  /** Matches a row whose `amountCents` OR `paidCents` falls in this range —
+   * an OR, not an AND, so "entre R$100 e R$200" catches a despesa either
+   * contratada or paga in that band, whichever the user meant. Only one of
+   * min/max needs to be set (an open-ended range). */
+  amountMinCents?: number;
+  amountMaxCents?: number;
+  /** Candidate scope only (a company as donor/fornecedor) — see
+   * counterpartyIsPoliticianOwned. Ignored for entity scope, where it has
+   * no meaning (the counterparty there is already a person, not a company). */
+  onlyPoliticianOwned?: boolean;
 };
 
 // sort key -> the SELECT alias to ORDER BY (all safe literals)
@@ -768,14 +1582,34 @@ export function getFinancePage(params: FinanceQuery): FinancePage {
   let where: string;
   let select: string;
   let from: string;
+  let dateCol: string; // raw expression (not the SELECT alias) so WHERE can reuse it
+  let paidExpr: string; // ditto -- "NULL" where the direction has no "paid" concept
   const args: unknown[] = [];
 
+  // A company as donor/fornecedor is "owned by a politician" when a sócio on
+  // its own quadro societário is ALSO a candidate somewhere (see
+  // candidate_supplier_partner in schema.sql / ADs/dados_derivados.md — a
+  // "possível" cross-reference, name+6-digit match, never asserted identity,
+  // but worth flagging inline instead of only on the separate
+  // /sinais/socio-fornecedor page). hasTable guards a DB that hasn't run
+  // that cross-reference yet. Not applicable to entity scope (the
+  // counterparty there is a person, not a company) -- left as "0".
+  const politicianOwnedExists = hasTable("candidate_supplier_partner")
+    ? `EXISTS (SELECT 1 FROM candidate_supplier_partner csp JOIN companies comp ON comp.id = csp.company_id WHERE comp.cnpj = %CNPJ_COL%)`
+    : "0";
+  let politicianOwnedExpr = "0";
+
   if (params.scope === "candidate" && params.dir === "received") {
+    dateCol = "t.receipt_date";
+    paidExpr = "NULL";
+    politicianOwnedExpr = politicianOwnedExists.replace("%CNPJ_COL%", "t.donor_cpf_cnpj");
     from = `campaign_donation t JOIN campaign_org co ON co.id = t.campaign_org_id
-            LEFT JOIN company_registry cr ON cr.cnpj = t.donor_cpf_cnpj`;
-    select = `t.id, t.year AS yr, t.receipt_date AS date, t.amount_cents AS amountCents, NULL AS paidCents,
+            LEFT JOIN company_registry cr ON cr.cnpj = t.donor_cpf_cnpj
+            ${PROVENANCE_JOIN}`;
+    select = `t.id, t.year AS yr, ${dateCol} AS date, t.amount_cents AS amountCents, ${paidExpr} AS paidCents,
               t.donor_name AS counterpartyName, t.donor_cpf_cnpj AS counterpartyDoc,
-              NULL AS counterpartyPersonId, cr.opened_at AS counterpartyOpenedAt, t.origin AS detail`;
+              NULL AS counterpartyPersonId, cr.opened_at AS counterpartyOpenedAt, t.origin AS detail,
+              ${politicianOwnedExpr} AS counterpartyIsPoliticianOwned, ${PROVENANCE_COLUMNS}`;
     where = "co.person_id = ?";
     args.push(Number(params.id));
     // SQLite LIKE is ASCII case-insensitive by default; donor_name is raw TSE
@@ -783,13 +1617,18 @@ export function getFinancePage(params: FinanceQuery): FinancePage {
     // non-accented spelling and vice-versa -- a known limitation.
     if (q) { where += " AND t.donor_name LIKE ?"; args.push(`%${q}%`); }
   } else if (params.scope === "candidate" && params.dir === "spent") {
+    dateCol = "t.expense_date";
+    paidExpr = `(SELECT coalesce(sum(x.amount_cents), 0) FROM campaign_expense_payment x
+                 WHERE x.campaign_expense_id = t.id)`;
+    politicianOwnedExpr = politicianOwnedExists.replace("%CNPJ_COL%", "t.supplier_cpf_cnpj");
     from = `campaign_expense t JOIN campaign_org co ON co.id = t.campaign_org_id
-            LEFT JOIN company_registry cr ON cr.cnpj = t.supplier_cpf_cnpj`;
-    select = `t.id, t.year AS yr, t.expense_date AS date, t.amount_cents AS amountCents,
-              (SELECT coalesce(sum(x.amount_cents), 0) FROM campaign_expense_payment x
-               WHERE x.campaign_expense_id = t.id) AS paidCents,
+            LEFT JOIN company_registry cr ON cr.cnpj = t.supplier_cpf_cnpj
+            ${PROVENANCE_JOIN}`;
+    select = `t.id, t.year AS yr, ${dateCol} AS date, t.amount_cents AS amountCents,
+              ${paidExpr} AS paidCents,
               t.supplier_name AS counterpartyName, t.supplier_cpf_cnpj AS counterpartyDoc,
-              NULL AS counterpartyPersonId, cr.opened_at AS counterpartyOpenedAt, t.description AS detail`;
+              NULL AS counterpartyPersonId, cr.opened_at AS counterpartyOpenedAt, t.description AS detail,
+              ${politicianOwnedExpr} AS counterpartyIsPoliticianOwned, ${PROVENANCE_COLUMNS}`;
     where = "co.person_id = ?";
     args.push(Number(params.id));
     if (q) {
@@ -799,17 +1638,46 @@ export function getFinancePage(params: FinanceQuery): FinancePage {
   } else {
     // entity scope: given = donations this cpf/cnpj made; received = payments it got
     const isGiven = params.dir === "given";
+    dateCol = isGiven ? "t.receipt_date" : "t.expense_date";
+    paidExpr = isGiven
+      ? "NULL"
+      : `(SELECT coalesce(sum(x.amount_cents), 0) FROM campaign_expense_payment x WHERE x.campaign_expense_id = t.id)`;
     from = `${isGiven ? "campaign_donation" : "campaign_expense"} t
             JOIN campaign_org co ON co.id = t.campaign_org_id
-            LEFT JOIN people p ON p.id = co.person_id`;
-    select = `t.id, t.year AS yr, ${isGiven ? "t.receipt_date" : "t.expense_date"} AS date,
+            LEFT JOIN people p ON p.id = co.person_id
+            ${PROVENANCE_JOIN}`;
+    select = `t.id, t.year AS yr, ${dateCol} AS date,
               t.amount_cents AS amountCents,
-              ${isGiven ? "NULL" : `(SELECT coalesce(sum(x.amount_cents), 0) FROM campaign_expense_payment x WHERE x.campaign_expense_id = t.id)`} AS paidCents,
+              ${paidExpr} AS paidCents,
               p.canonical_name AS counterpartyName, t.cnpj AS counterpartyDoc,
-              co.person_id AS counterpartyPersonId, NULL AS counterpartyOpenedAt, t.origin AS detail`;
+              co.person_id AS counterpartyPersonId, NULL AS counterpartyOpenedAt, t.origin AS detail,
+              0 AS counterpartyIsPoliticianOwned, ${PROVENANCE_COLUMNS}`;
     where = isGiven ? "t.donor_cpf_cnpj = ?" : "t.supplier_cpf_cnpj = ?";
     args.push(digitsOnly(params.id));
     if (q) { where += " AND p.canonical_name LIKE ?"; args.push(`%${normalizeName(q)}%`); }
+  }
+
+  if (params.year != null) {
+    where += " AND t.year = ?";
+    args.push(params.year);
+  }
+
+  if (params.dateFrom) { where += ` AND ${dateCol} >= ?`; args.push(params.dateFrom); }
+  if (params.dateTo) { where += ` AND ${dateCol} <= ?`; args.push(params.dateTo); }
+
+  if (params.amountMinCents != null || params.amountMaxCents != null) {
+    const min = params.amountMinCents ?? 0;
+    const max = params.amountMaxCents ?? Number.MAX_SAFE_INTEGER;
+    // OR, not AND: "entre R$100 e R$200" should catch a row either
+    // contratada or paga in that band -- paidExpr is NULL for
+    // donations/given (no "paid" concept there), so that side just never
+    // matches instead of erroring.
+    where += ` AND ((t.amount_cents BETWEEN ? AND ?) OR (${paidExpr} IS NOT NULL AND (${paidExpr}) BETWEEN ? AND ?))`;
+    args.push(min, max, min, max);
+  }
+
+  if (params.onlyPoliticianOwned && params.scope === "candidate") {
+    where += ` AND ${politicianOwnedExpr}`;
   }
 
   // `from`/`select`/`where` are built from fixed literals above; every
@@ -825,6 +1693,10 @@ export function getFinancePage(params: FinanceQuery): FinancePage {
     )
     .all(...args, FINANCE_PAGE_SIZE, offset) as Array<Record<string, unknown>>;
 
+  const photoUrls = batchPhotoUrls(
+    rows.map((r) => r.counterpartyPersonId as number | null).filter((id): id is number => id != null)
+  );
+
   return {
     total,
     pageSize: FINANCE_PAGE_SIZE,
@@ -839,6 +1711,11 @@ export function getFinancePage(params: FinanceQuery): FinancePage {
       counterpartyPersonId: (r.counterpartyPersonId as number) ?? null,
       counterpartyOpenedAt: (r.counterpartyOpenedAt as string) ?? null,
       detail: (r.detail as string) ?? null,
+      counterpartyIsPoliticianOwned: Boolean(r.counterpartyIsPoliticianOwned),
+      counterpartyPhotoUrl: r.counterpartyPersonId != null
+        ? (photoUrls.get(r.counterpartyPersonId as number) ?? null)
+        : null,
+      provenance: pickProvenance(r),
     })),
   };
 }
@@ -923,7 +1800,7 @@ function formatCnpjLocal(cnpj: string): string {
     : cnpj;
 }
 
-export type GraphNodeKind = "politician" | "donor" | "supplier" | "sanctioned" | "company" | "person";
+export type GraphNodeKind = "politician" | "donor" | "supplier" | "sanctioned" | "company" | "person" | "self";
 
 export type GraphNodeInfo = {
   cpfCnpj: string;
@@ -932,6 +1809,8 @@ export type GraphNodeInfo = {
   label: string;
   sanctioned: boolean;
   registryStatus: string | null; // companies only
+  personId: number | null; // set only for candidates
+  photoUrl: string | null; // set only when personId has one on file (elosys/tse/photo_urls.py)
 };
 
 export type GraphEdgeKind = "donation" | "payment";
@@ -968,8 +1847,8 @@ function lookupNodes(
   // the only correct signal for the amber "político" color, not just "is an
   // 11-digit id" (which every donor/supplier CPF also is).
   const people = db()
-    .prepare(`SELECT cpf, canonical_name FROM people WHERE cpf IN (${placeholders})`)
-    .all(...clean) as Array<{ cpf: string; canonical_name: string | null }>;
+    .prepare(`SELECT id, cpf, canonical_name FROM people WHERE cpf IN (${placeholders})`)
+    .all(...clean) as Array<{ id: number; cpf: string; canonical_name: string | null }>;
   const companies = db()
     .prepare(
       `SELECT c.cnpj, c.kind, coalesce(cr.legal_name, c.legal_name) AS name,
@@ -990,15 +1869,15 @@ function lookupNodes(
   // normally canonicalised to the CPF upstream (getGraphPaths /
   // resolveGraphNode), so this is a fallback for a committee CNPJ that
   // reaches here raw; authoritative via campaign_org, not companies.kind.
-  const committeeOwner = new Map<string, string | null>();
+  const committeeOwner = new Map<string, { name: string | null; personId: number }>();
   for (const r of db()
     .prepare(
-      `SELECT DISTINCT c.cnpj, p.canonical_name AS name FROM campaign_org co
+      `SELECT DISTINCT c.cnpj, p.canonical_name AS name, p.id AS personId FROM campaign_org co
        JOIN companies c ON c.id = co.company_id JOIN people p ON p.id = co.person_id
        WHERE c.cnpj IN (${placeholders})`
     )
-    .all(...clean) as Array<{ cnpj: string; name: string | null }>) {
-    if (!committeeOwner.has(r.cnpj)) committeeOwner.set(r.cnpj, r.name);
+    .all(...clean) as Array<{ cnpj: string; name: string | null; personId: number }>) {
+    if (!committeeOwner.has(r.cnpj)) committeeOwner.set(r.cnpj, { name: r.name, personId: r.personId });
   }
 
   for (const id of clean) {
@@ -1009,7 +1888,7 @@ function lookupNodes(
       // donor/supplier from edge context otherwise. Nobody defaults to amber.
       kind: id.length === 14 ? "company" : "person",
       label: id.length === 14 ? formatCnpjLocal(id) : id,
-      sanctioned: sanctioned.has(id), registryStatus: null,
+      sanctioned: sanctioned.has(id), registryStatus: null, personId: null, photoUrl: null,
     });
   }
   for (const p of people) {
@@ -1017,6 +1896,7 @@ function lookupNodes(
     if (n) {
       n.label = p.canonical_name ?? p.cpf;
       n.kind = "politician";
+      n.personId = p.id;
     }
   }
   for (const c of companies) {
@@ -1041,16 +1921,21 @@ function lookupNodes(
     }
   }
   // A campaign committee CNPJ is the candidate: amber, named.
-  for (const [cnpj, name] of committeeOwner) {
+  for (const [cnpj, owner] of committeeOwner) {
     const n = nodeById.get(cnpj);
     if (n) {
       n.kind = "politician";
-      if (name) n.label = name;
+      if (owner.name) n.label = owner.name;
+      n.personId = owner.personId;
     }
   }
   // sanctioned overrides the color regardless of donor/supplier/company/person
   for (const n of nodeById.values()) {
     if (n.sanctioned) n.kind = "sanctioned";
+  }
+  const photoUrls = batchPhotoUrls([...nodeById.values()].map((n) => n.personId).filter((id): id is number => id != null));
+  for (const n of nodeById.values()) {
+    if (n.personId != null) n.photoUrl = photoUrls.get(n.personId) ?? null;
   }
   return nodeById;
 }
@@ -1584,6 +2469,7 @@ export type PoliticianNetworkNode = {
   personId: number;
   label: string;
   amountCents: number; // this edge's amount (to/from the node one level closer to center)
+  photoUrl: string | null;
 };
 
 export type PoliticianNetworkBranch = {
@@ -1618,7 +2504,10 @@ function politicianDonationEdges(
        JOIN people p2 ON p2.id = d.donor_person_id
        WHERE co.person_id = ? AND d.donor_person_id IS NOT NULL AND d.donor_person_id != ?
        GROUP BY d.donor_person_id ORDER BY amountCents DESC LIMIT ?`;
-  return db().prepare(sql).all(personId, personId, MAX_PER_LEVEL) as PoliticianNetworkNode[];
+  const rows = db().prepare(sql).all(personId, personId, MAX_PER_LEVEL) as Array<
+    Omit<PoliticianNetworkNode, "photoUrl">
+  >;
+  return rows.map((r) => ({ ...r, photoUrl: null }));
 }
 
 export function getPoliticianDonationNetwork(personId: number): PoliticianDonationNetwork {
@@ -1628,10 +2517,23 @@ export function getPoliticianDonationNetwork(personId: number): PoliticianDonati
       children: politicianDonationEdges(node.personId, direction).filter((c) => c.personId !== personId),
     }));
 
-  return {
-    donatedTo: build("donated_to"),
-    receivedFrom: build("received_from"),
+  const donatedTo = build("donated_to");
+  const receivedFrom = build("received_from");
+
+  const allIds = [
+    ...donatedTo.flatMap((b) => [b.node.personId, ...b.children.map((c) => c.personId)]),
+    ...receivedFrom.flatMap((b) => [b.node.personId, ...b.children.map((c) => c.personId)]),
+  ];
+  const photoUrls = batchPhotoUrls(allIds);
+  const patch = (n: PoliticianNetworkNode) => {
+    n.photoUrl = photoUrls.get(n.personId) ?? null;
   };
+  for (const b of [...donatedTo, ...receivedFrom]) {
+    patch(b.node);
+    b.children.forEach(patch);
+  }
+
+  return { donatedTo, receivedFrom };
 }
 
 // ------------------------------------------------------------------
@@ -1789,9 +2691,14 @@ function discourseWhere(opts: {
   group?: boolean;
   handle?: string;
   q?: string;
+  personId?: number;
 }): { where: string; args: unknown[] } {
   const clauses = ["r.is_offensive = 1"];
   const args: unknown[] = [];
+  if (opts.personId != null) {
+    clauses.push("a.person_id = ?");
+    args.push(opts.personId);
+  }
   if (opts.category) {
     clauses.push("r.categories LIKE ?");
     args.push(`%"${opts.category}"%`);
@@ -1869,6 +2776,7 @@ export function getDiscourseCount(opts: {
   group?: boolean;
   handle?: string;
   q?: string;
+  personId?: number;
 }): number {
   if (!hasTable("social_post_review")) return 0;
   const { where, args } = discourseWhere(opts);
@@ -1885,6 +2793,7 @@ export function getDiscourseSignals(opts: {
   group?: boolean;
   handle?: string;
   q?: string;
+  personId?: number;
   limit?: number;
   offset?: number;
 }): DiscourseSignal[] {

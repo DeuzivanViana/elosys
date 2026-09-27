@@ -73,10 +73,17 @@ from ..util import git_commit, now_utc
 log = get_logger("elosys.rules.circular_donations")
 
 RULE_NAME = "circular_donations"
-RULE_VERSION = "1.0"
+RULE_VERSION = "1.1"  # 1.1: min_amount_cents floor, so a R$20 cycle doesn't generate a signal
 
 DEFAULT_MAX_DEPTH = 5
 DEFAULT_MAX_FANOUT = 400
+# A cycle's total movement below this is noise, not a signal worth a human's
+# time -- was previously only handled by sorting in the UI (see
+# ADs/dados_derivados.md §1.2), which still generated (and stored) a signal
+# for every R$20 cycle. Filtered here instead, in the rule itself, so
+# `rule_run.rows_generated` and the signal count actually reflect what's
+# worth looking at.
+DEFAULT_MIN_AMOUNT_CENTS = 1_000_000  # R$ 10.000,00
 
 # A cycle this short (<= this many edges) is a tight loop between very few
 # parties -- flagged high; longer ones (up to max_depth) are still worth a
@@ -297,7 +304,8 @@ def _severity(cycle_len: int) -> str:
 
 
 def run(con: sqlite3.Connection, *, max_depth: int = DEFAULT_MAX_DEPTH,
-        max_fanout: int = DEFAULT_MAX_FANOUT) -> dict:
+        max_fanout: int = DEFAULT_MAX_FANOUT,
+        min_amount_cents: int = DEFAULT_MIN_AMOUNT_CENTS) -> dict:
     with step(log, "reset circular_donations signals"):
         _reset(con)
 
@@ -320,7 +328,7 @@ def run(con: sqlite3.Connection, *, max_depth: int = DEFAULT_MAX_DEPTH,
     log.info("  %s cycles found (%s hub-node branches skipped)",
               f"{len(all_cycles):,}", f"{hub_skipped_total:,}")
 
-    params = {"max_depth": max_depth, "max_fanout": max_fanout}
+    params = {"max_depth": max_depth, "max_fanout": max_fanout, "min_amount_cents": min_amount_cents}
     cur = con.execute(
         "INSERT INTO rule_run (rule, rule_version, code_commit, params, run_at, rows_generated) "
         "VALUES (?, ?, ?, ?, ?, 0)",
@@ -329,14 +337,21 @@ def run(con: sqlite3.Connection, *, max_depth: int = DEFAULT_MAX_DEPTH,
     rule_run_id = int(cur.lastrowid)
 
     generated = 0
+    below_floor = 0
     cache = _WriteCache()
     with step(log, "write signals"):
         rc = RowCounter(log, "signals written", every=20_000)
         for cycle in all_cycles:
             cpfs = [id_to_node[i] for i in cycle]
-            generated += _write_cycle_signal(con, rule_run_id, cycle, cpfs, edge_kind, edge_amount, cache)
+            wrote = _write_cycle_signal(
+                con, rule_run_id, cycle, cpfs, edge_kind, edge_amount, cache, min_amount_cents
+            )
+            generated += wrote
+            below_floor += 0 if wrote else 1
             rc.tick()
         rc.done()
+    log.info("  %s cycles skipped (total movement below R$ %.2f)",
+             f"{below_floor:,}", min_amount_cents / 100)
     con.execute("UPDATE rule_run SET rows_generated = ? WHERE id = ?", (generated, rule_run_id))
     con.commit()
 
@@ -440,11 +455,14 @@ def _write_cycle_signal(
     edge_kind: dict[tuple[int, int], str],
     edge_amount: dict[tuple[int, int], int],
     cache: _WriteCache,
+    min_amount_cents: int,
 ) -> int:
     n = len(cpfs)
     total_amount = sum(
         edge_amount.get((cycle_ids[i], cycle_ids[(i + 1) % n]), 0) for i in range(n)
     )
+    if total_amount < min_amount_cents:
+        return 0
     chain = " -> ".join(f"{cpfs[i]} ({_name_for(con, cpfs[i], cache) or 'sem nome'})" for i in range(n))
     explanation = (
         f"Loop de movimentação de campanha entre {n} entidades, R$ {total_amount / 100:,.2f} "
@@ -494,6 +512,14 @@ def _reset(con: sqlite3.Connection) -> None:
         "(SELECT s.id FROM signal s JOIN rule_run r ON r.id = s.rule_run_id WHERE r.rule = ?)",
         (RULE_NAME,),
     )
+    # signal_ai_review is a separate, non-rule cache (ai_review.py) that also
+    # references signal(id) -- deleting signal without clearing it first trips
+    # the FK constraint whenever ai-review has already run over old signals.
+    con.execute(
+        "DELETE FROM signal_ai_review WHERE signal_id IN "
+        "(SELECT s.id FROM signal s JOIN rule_run r ON r.id = s.rule_run_id WHERE r.rule = ?)",
+        (RULE_NAME,),
+    )
     con.execute(
         "DELETE FROM signal WHERE rule_run_id IN (SELECT id FROM rule_run WHERE rule = ?)",
         (RULE_NAME,),
@@ -509,12 +535,16 @@ def _main(argv: list[str] | None = None) -> int:
                    help=f"max cycle length in hops (default: {DEFAULT_MAX_DEPTH})")
     p.add_argument("--max-fanout", type=int, default=DEFAULT_MAX_FANOUT,
                    help=f"skip branching through nodes with more edges than this (default: {DEFAULT_MAX_FANOUT})")
+    p.add_argument("--min-amount-brl", type=float, default=DEFAULT_MIN_AMOUNT_CENTS / 100,
+                   help="skip a cycle whose total movement is below this many reais "
+                        f"(default: {DEFAULT_MIN_AMOUNT_CENTS / 100:.2f})")
     args = p.parse_args(argv)
 
     create_schema(args.db)
     con = connect(args.db, write=True)
     try:
-        report = run(con, max_depth=args.max_depth, max_fanout=args.max_fanout)
+        report = run(con, max_depth=args.max_depth, max_fanout=args.max_fanout,
+                    min_amount_cents=round(args.min_amount_brl * 100))
     finally:
         con.close()
     print(json.dumps(report, indent=2, ensure_ascii=False))
