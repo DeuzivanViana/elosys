@@ -8,8 +8,7 @@ export default function GrafoPage() {
   return (
     <main className="flex h-full flex-col">
       <PageHeader group="EloSys" current="Grafo de correlações" />
-      {/* GraphCanvas reads ?add= via useSearchParams, which Next requires a
-          Suspense boundary around. */}
+      {/* useSearchParams in GraphCanvas requires a Suspense boundary. */}
       <Suspense fallback={null}>
         <GraphCanvas />
       </Suspense>

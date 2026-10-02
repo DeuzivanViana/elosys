@@ -1,6 +1,5 @@
 import { Skeleton } from "@/components/skeleton";
 
-/** Shared shape for /cnpj/[cnpj] and /cpf/[cpf]'s loading.tsx. */
 export function EntityLoadingSkeleton() {
   return (
     <main className="mx-auto w-full max-w-4xl">

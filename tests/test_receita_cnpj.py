@@ -90,7 +90,6 @@ def test_fetches_registry_and_partners(db, tmp_path, monkeypatch):
     assert [p["partner_name"] for p in partners] == ["FACEBOOK MIAMI, INC.", "CONRADO LEISTER"]
     assert partners[0]["entry_date"] == "2015-09-17"
 
-    # provenance: company_registry -> parse -> collection -> source
     src = con.execute(
         "SELECT s.name FROM company_registry r JOIN parse p ON p.id = r.provenance_id "
         "JOIN collection c ON c.id = p.collection_id JOIN source s ON s.id = c.source_id"
@@ -110,7 +109,6 @@ def test_404_counted_as_not_found_not_error(db, tmp_path, monkeypatch):
 
 
 def test_never_creates_a_people_row(db, tmp_path, monkeypatch):
-    # partner CPFs are masked -> no identity linking is even attempted.
     monkeypatch.setattr(receita_cnpj, "download", _fake_download_factory())
     con = connect(db, write=True)
     before = con.execute("SELECT count(*) FROM people").fetchone()[0]
@@ -121,26 +119,19 @@ def test_never_creates_a_people_row(db, tmp_path, monkeypatch):
 
 
 def test_incremental_missing_first_queue(db, tmp_path, monkeypatch):
-    """Without an explicit cnpjs= list, run() only fetches companies that
-    don't already have a company_registry row -- and re-running doesn't
-    re-fetch what's already cached (this crawler is NOT rewrite-only)."""
     monkeypatch.setattr(receita_cnpj, "download", _fake_download_factory())
     con = connect(db, write=True)
     rep1 = receita_cnpj.run(con, limit=10, tmp_dir=tmp_path, delay_seconds=0)
-    # one company succeeds (13347016000117), one 404s (00000000000000)
     assert rep1["fetched"] == 1
     assert rep1["not_found"] == 1
 
     rep2 = receita_cnpj.run(con, limit=10, tmp_dir=tmp_path, delay_seconds=0)
-    # the fetched one is no longer in the "missing" queue; the 404 one has no
-    # cache row either way, so it's retried (and 404s again) -- fine, cheap.
     assert rep2["fetched"] == 0
     assert con.execute("SELECT count(*) FROM company_registry").fetchone()[0] == 1
     con.close()
 
 
 def _seed_money_ranking(tmp_path):
-    """Three supplier CNPJs paid different amounts + one campaign committee."""
     path = tmp_path / "rank.db"
     create_schema(path)
     t = "2026-01-01T00:00:00Z"
@@ -172,13 +163,11 @@ def test_money_order_ranks_biggest_supplier_first(tmp_path, monkeypatch):
     monkeypatch.setattr(receita_cnpj, "download", _fake_download_factory())
     con = connect(_seed_money_ranking(tmp_path), write=True)
 
-    # limit=1 must pick 33333333000133 (paid R$ 9.000), not the smaller ones
     targets = con.execute(
         receita_cnpj._MONEY_RANKED_QUERY.format(kind_filter="AND c.kind IS NOT 'campaign'"), (1,)
     ).fetchall()
     assert [r["cnpj"] for r in targets] == ["33333333000133"]
 
-    # the campaign committee is excluded by default, included with the flag
     all_default = con.execute(
         receita_cnpj._MONEY_RANKED_QUERY.format(kind_filter="AND c.kind IS NOT 'campaign'"), (99,)
     ).fetchall()

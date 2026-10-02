@@ -10,7 +10,6 @@ export default async function CnpjPage({ params, searchParams }: PageProps<"/cnp
   const digits = digitsOnly(cnpj);
   if (digits.length !== 14) notFound();
 
-  // A campaign CNPJ IS its candidate -- send it to the full profile ("juntar os 3").
   const personId = candidatePersonId(digits);
   if (personId !== null) redirect(`/politico/${personId}`);
 

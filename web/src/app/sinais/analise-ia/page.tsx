@@ -56,10 +56,7 @@ export default async function AnaliseIaPage({ searchParams }: PageProps<"/sinais
       <PageHeader group="Sinais" current="Análise de IA" />
 
       <section>
-        <div className="mono-label">
-          elosys/rules/ai_review.py · segunda opinião de LLM {summary.model ? `(${summary.model})` : ""}
-        </div>
-        <h1 className="mt-3 text-[26px] leading-tight font-medium tracking-tight">
+        <h1 className="text-[26px] leading-tight font-medium tracking-tight">
           O que a IA achou estranho
         </h1>
         <p className="mt-4 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>

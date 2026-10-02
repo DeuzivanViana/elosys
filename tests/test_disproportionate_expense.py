@@ -43,13 +43,9 @@ def test_flags_cheap_item_over_threshold(tmp_path):
     con = connect(path, write=True)
     pid, company_id, org_id = _seed_common(con)
 
-    # R$ 15.000 of "canetas" -> medium (over 5k floor, under 50k)
     _insert_expense(con, org_id, company_id, "CANETAS E BLOCOS DE ANOTACAO", 1_500_000, "1")
-    # R$ 1.539.000 of adhesive stickers -> high
     _insert_expense(con, org_id, company_id, "ADESIVOS, PRAGUINHA, PRAGAO, PERFURADOS", 153_900_000, "2")
-    # R$ 200 of pens -> below the floor, not flagged
     _insert_expense(con, org_id, company_id, "CANETA AZUL", 20_000, "3")
-    # R$ 80.000 for a car rental -> no keyword match, not flagged
     _insert_expense(con, org_id, company_id, "LOCACAO DE VEICULO PARA CAMPANHA", 8_000_000, "4")
     con.commit()
 
@@ -66,8 +62,6 @@ def test_flags_cheap_item_over_threshold(tmp_path):
     assert all(r["type"] == "cheap_item_high_value" for r in signals)
     assert "R$" in signals[0]["explanation"]
 
-    # actors recorded: candidate (person) and supplier (company), for the
-    # first flagged expense (campaign_expense.id 1, tse_expense_id '1')
     actor_types = {
         (r["type"], r["role"]) for r in con.execute(
             "SELECT sa.type, sa.role FROM signal_actor sa "
@@ -115,6 +109,36 @@ def test_rewrite_only_rerun_does_not_duplicate(tmp_path):
     assert con.execute("SELECT count(*) FROM signal").fetchone()[0] == 1
     assert con.execute("SELECT count(*) FROM rule_run").fetchone()[0] == 1
     assert con.execute("SELECT count(*) FROM signal_evidence").fetchone()[0] == 1
+    con.close()
+
+
+def test_median_based_threshold_for_high_sample_category(tmp_path):
+    path = tmp_path / "t.db"
+    create_schema(path)
+    con = connect(path, write=True)
+    _, company_id, org_id = _seed_common(con)
+
+    for i in range(20):
+        amount = 10_000 if i != 0 else 20_000
+        _insert_expense(con, org_id, company_id, "CANETAS PERSONALIZADAS", amount, f"base-{i}")
+    _insert_expense(con, org_id, company_id, "CANETAS PERSONALIZADAS", 200_000, "medium-case")
+    _insert_expense(con, org_id, company_id, "CANETAS PERSONALIZADAS", 500_000, "high-case")
+    _insert_expense(con, org_id, company_id, "CANETAS PERSONALIZADAS", 30_000, "not-flagged")
+    con.commit()
+
+    rule.run(con)
+    flagged = {
+        r["record_id"]: r["severity"]
+        for r in con.execute(
+            "SELECT se.record_id, s.severity FROM signal s "
+            "JOIN signal_evidence se ON se.signal_id = s.id"
+        )
+    }
+    ids_by_expense = dict(con.execute("SELECT tse_expense_id, id FROM campaign_expense"))
+    assert flagged.get(ids_by_expense["medium-case"]) == "medium"
+    assert flagged.get(ids_by_expense["high-case"]) == "high"
+    assert ids_by_expense["not-flagged"] not in flagged
+    assert all(ids_by_expense[f"base-{i}"] not in flagged for i in range(20))
     con.close()
 
 

@@ -4,6 +4,7 @@ import {
   getSupplierPartnerSummary,
   getAiReviewSummary,
   getDiscourseSummary,
+  getDisproportionateExpenseCount,
 } from "./queries";
 
 export type HomeStats = {
@@ -16,12 +17,7 @@ export type HomeStats = {
   years: string;
 };
 
-// Elosys's .db is rewrite-only (see ADs/imutabilidade.md): it only changes
-// when a crawler is re-run and this server process is restarted — never
-// mid-process. So these full-table SUMs (over 5M+/9M+ rows) are safe to
-// compute once per process and reuse, instead of on every home page visit.
-// Keyed by year (0 = "todos os anos") so the ?ano= filter on the home page
-// doesn't redo the full-table scan more than once per year either.
+// The .db is rewrite-only, so these full-table sums are cached per process.
 const cache = new Map<number, HomeStats>();
 
 export function getHomeStats(year?: number): HomeStats {
@@ -58,9 +54,9 @@ export type SidebarCounts = {
   supplierPartner: number;
   aiReview: number;
   discourse: number;
+  disproportionateExpense: number;
 };
 
-// Same rewrite-only reasoning as getHomeStats: safe to cache per process.
 let cachedCounts: SidebarCounts | null = null;
 
 export function getSidebarCounts(): SidebarCounts {
@@ -70,6 +66,7 @@ export function getSidebarCounts(): SidebarCounts {
     supplierPartner: getSupplierPartnerSummary().total,
     aiReview: getAiReviewSummary().total,
     discourse: getDiscourseSummary().total,
+    disproportionateExpense: getDisproportionateExpenseCount(),
   };
   return cachedCounts;
 }

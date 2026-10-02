@@ -1,52 +1,10 @@
-"""Léxico PT-BR de termos potencialmente pejorativos / discriminatórios.
-
-PARA QUE SERVE
---------------
-É um **filtro de recall**, não um classificador. A busca do X (`from:handle
-(termo OR termo ...)`) usa este léxico só pra reduzir "todos os tweets da
-conta" a "os que MERECEM ser lidos". A decisão sobre se o tweet é de fato
-pejorativo — no contexto — é do humano, com a segunda opinião do DeepSeek
-(`elosys/rules/social_review.py`). Aqui a régua é deliberadamente FROUXA:
-melhor um falso positivo que o DeepSeek descarta do que perder o tweet.
-
-Por isso a lista é grande e inclui:
-  - termos que quase sempre são ataque (`weight="alta"`);
-  - termos que dependem muito do contexto (`weight="media"`);
-  - palavras neutras/idiomáticas/reapropriadas que só ofendem em certos usos
-    (`weight="baixa"`) — ex.: "macaco", "nega", "viado" (usado por LGBT),
-    "nordestino", "cigano", "japa". Entram porque queremos o recall; a
-    coluna `weight` + o campo `note` orientam a triagem e o DeepSeek.
-
-O que NÃO entra: xingamento político genérico ("ladrão", "corrupto",
-"vagabundo" sem alvo de grupo, "mentiroso") — é universal na política
-brasileira, ruído puro. E palavrão puro sem alvo ("porra", "merda").
-
-Referências de datasets públicos de hate speech PT-BR usados como base:
-HateBR, OLID-BR, ToLD-BR, HateBRXplain, além do glossário do "Manual de
-Redação para a Diversidade" e de decisões do STF sobre injúria racial e
-homotransfobia (ADI 26 / MI 4733).
-
-ESTRUTURA
----------
-LEXICON: dict[categoria, list[Termo]]
-Termo = (texto, weight, note|None)
-  texto  — string de busca. Se tem espaço, o query-builder põe entre aspas
-           (match de frase exata no X).
-  weight — "alta" | "media" | "baixa"
-  note   — por que é ambíguo / o que checar (opcional)
-
-`search_terms(min_weight=...)` devolve a lista achatada.
-`build_queries(handle, ...)` monta as queries `from:` respeitando o limite
-de ~512 chars do X.
-"""
+"""Léxico PT-BR de termos potencialmente pejorativos / discriminatórios."""
 
 from __future__ import annotations
 
 Termo = tuple[str, str, str | None]
 
-# --------------------------------------------------------------------------
 # LGBTfobia / homotransfobia
-# --------------------------------------------------------------------------
 _LGBTFOBIA: list[Termo] = [
     ("viado", "media", "insulto comum; usado tb por pessoas LGBT de forma reapropriada"),
     ("veado", "media", "grafia alternativa; tb o animal — DeepSeek decide"),
@@ -104,9 +62,7 @@ _LGBTFOBIA: list[Termo] = [
     ("virou mulher", "baixa", None),
 ]
 
-# --------------------------------------------------------------------------
 # Racismo — pessoas negras
-# --------------------------------------------------------------------------
 _RACISMO_NEGROS: list[Termo] = [
     ("macaco", "media", "injúria racial clássica; tb o animal / 'macaco de auditório'"),
     ("macaca", "media", None),
@@ -160,9 +116,7 @@ _RACISMO_NEGROS: list[Termo] = [
     ("deviam agradecer", "media", "context: 'negros deviam agradecer a escravidão'"),
 ]
 
-# --------------------------------------------------------------------------
 # Racismo — povos indígenas
-# --------------------------------------------------------------------------
 _RACISMO_INDIGENAS: list[Termo] = [
     ("índio preguiçoso", "alta", None),
     ("muita terra pra pouco índio", "alta", None),
@@ -185,9 +139,7 @@ _RACISMO_INDIGENAS: list[Termo] = [
     ("autodeclaração fraudulenta", "baixa", None),
 ]
 
-# --------------------------------------------------------------------------
 # Racismo — pessoas asiáticas
-# --------------------------------------------------------------------------
 _RACISMO_ASIATICOS: list[Termo] = [
     ("japa", "baixa", "muito usado sem intenção pej.; ofensivo em certos usos"),
     ("olho puxado", "media", None),
@@ -206,9 +158,7 @@ _RACISMO_ASIATICOS: list[Termo] = [
     ("perigo amarelo", "alta", None),
 ]
 
-# --------------------------------------------------------------------------
 # Racismo / xenofobia — ciganos (povo Rom / Calon)
-# --------------------------------------------------------------------------
 _CIGANOS: list[Termo] = [
     ("cigano ladrão", "alta", None),
     ("cigano do dinheiro", "alta", None),
@@ -220,9 +170,7 @@ _CIGANOS: list[Termo] = [
     ("acampamento cigano", "baixa", "context"),
 ]
 
-# --------------------------------------------------------------------------
 # Antissemitismo
-# --------------------------------------------------------------------------
 _ANTISSEMITISMO: list[Termo] = [
     ("judeu safado", "alta", None),
     ("judeu sovina", "alta", None),
@@ -253,10 +201,8 @@ _ANTISSEMITISMO: list[Termo] = [
     ("sinagoga de satanás", "alta", None),
 ]
 
-# --------------------------------------------------------------------------
 # Intolerância religiosa (foco: religiões de matriz africana, islamofobia,
 # ataques a católicos/evangélicos)
-# --------------------------------------------------------------------------
 _RELIGIAO: list[Termo] = [
     ("macumbeiro", "media", "pej. contra religiões afro; reapropriado tb"),
     ("macumba", "baixa", "termo genérico, pej. em muitos usos"),
@@ -291,9 +237,7 @@ _RELIGIAO: list[Termo] = [
     ("bancada da bíblia", "baixa", "termo jornalístico neutro; pej. em certos usos"),
 ]
 
-# --------------------------------------------------------------------------
 # Misoginia / machismo
-# --------------------------------------------------------------------------
 _MISOGINIA: list[Termo] = [
     ("vagabunda", "media", "insulto de gênero quando dirigido a mulher"),
     ("vagaba", "media", None),
@@ -350,9 +294,7 @@ _MISOGINIA: list[Termo] = [
     ("assassina de bebês", "media", "context: sobre mulheres / aborto"),
 ]
 
-# --------------------------------------------------------------------------
 # Capacitismo (deficiência física, intelectual, transtornos mentais)
-# --------------------------------------------------------------------------
 _CAPACITISMO: list[Termo] = [
     ("retardado", "alta", None),
     ("retardada", "alta", None),
@@ -403,9 +345,7 @@ _CAPACITISMO: list[Termo] = [
     ("gordo e feio", "baixa", None),
 ]
 
-# --------------------------------------------------------------------------
 # Xenofobia (estrangeiros / imigrantes)
-# --------------------------------------------------------------------------
 _XENOFOBIA: list[Termo] = [
     ("volta pro seu país", "alta", None),
     ("vai pra Venezuela", "media", "tb crítica política legítima; DeepSeek decide"),
@@ -432,9 +372,7 @@ _XENOFOBIA: list[Termo] = [
     ("raça estrangeira", "alta", None),
 ]
 
-# --------------------------------------------------------------------------
 # Regionalismo (preconceito entre regiões do Brasil)
-# --------------------------------------------------------------------------
 _REGIONALISMO: list[Termo] = [
     ("paraíba", "baixa", "em SP, pej. p/ nordestino; tb o estado"),
     ("cabeça chata", "alta", None),
@@ -474,9 +412,7 @@ _REGIONALISMO: list[Termo] = [
     ("brega", "baixa", "context: cultura nordestina como 'brega'"),
 ]
 
-# --------------------------------------------------------------------------
 # Aporofobia (ódio/desprezo a pessoas pobres)
-# --------------------------------------------------------------------------
 _APOROFOBIA: list[Termo] = [
     ("favelado", "media", "pej. quando usado como classe/insulto"),
     ("favelada", "media", None),
@@ -512,9 +448,7 @@ _APOROFOBIA: list[Termo] = [
     ("shopping de pobre", "media", None),
 ]
 
-# --------------------------------------------------------------------------
 # Gordofobia
-# --------------------------------------------------------------------------
 _GORDOFOBIA: list[Termo] = [
     ("baleia", "media", "insulto; tb o animal"),
     ("baleia franca", "alta", None),
@@ -538,9 +472,7 @@ _GORDOFOBIA: list[Termo] = [
     ("vai estourar", "baixa", None),
 ]
 
-# --------------------------------------------------------------------------
 # Etarismo (idosos) e sorofobia (pessoas com HIV / doenças estigmatizadas)
-# --------------------------------------------------------------------------
 _ETARISMO_SAUDE: list[Termo] = [
     ("velho caduco", "alta", None),
     ("véio gagá", "alta", None),
@@ -567,9 +499,7 @@ _ETARISMO_SAUDE: list[Termo] = [
     ("peste ambulante", "media", None),
 ]
 
-# --------------------------------------------------------------------------
 # Desumanização genérica (metáforas que retiram humanidade — só as fortes)
-# --------------------------------------------------------------------------
 _DESUMANIZACAO: list[Termo] = [
     ("verme", "media", "'esses vermes'; tb uso brando"),
     ("vermes", "media", None),
@@ -630,7 +560,6 @@ _WEIGHT_RANK = {"baixa": 0, "media": 1, "alta": 2}
 
 
 def all_terms() -> list[tuple[str, str, str, str | None]]:
-    """(categoria, termo, weight, note) achatado, sem duplicatas de termo."""
     seen: set[str] = set()
     out: list[tuple[str, str, str, str | None]] = []
     for cat, termos in LEXICON.items():
@@ -644,7 +573,6 @@ def all_terms() -> list[tuple[str, str, str, str | None]]:
 
 
 def search_terms(min_weight: str = "baixa", categories: list[str] | None = None) -> list[str]:
-    """Só os textos de busca, filtrando por peso mínimo e (opcional) categoria."""
     floor = _WEIGHT_RANK[min_weight]
     cats = set(categories) if categories else None
     out: list[str] = []
@@ -668,8 +596,6 @@ def build_queries(
     max_len: int = 480,
     extra: str = "-filter:retweets",
 ) -> list[str]:
-    """Monta as queries `from:<handle> (t OR t OR ...)` respeitando ~512 chars
-    do X. Retorna uma lista (a busca é feita em várias partes)."""
     handle = handle.lstrip("@")
     prefix = f"from:{handle} "
     suffix = f" {extra}".rstrip()
@@ -680,7 +606,7 @@ def build_queries(
     cur: list[str] = []
     cur_len = 0
     for tok in tokens:
-        add = len(tok) + (4 if cur else 0)  # ' OR '
+        add = len(tok) + (4 if cur else 0)
         if cur and cur_len + add > budget:
             queries.append(f"{prefix}({' OR '.join(cur)}){suffix}")
             cur, cur_len = [], 0

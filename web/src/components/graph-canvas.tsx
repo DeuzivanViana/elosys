@@ -28,10 +28,6 @@ import { useColorMode } from "@/lib/use-color-mode";
 
 const WIDTH = 1100;
 const HEIGHT = 700;
-// Frontend cap on how many distance-2 connector nodes a single add can
-// bring in -- the backend returns every connector it finds (a pair of big
-// campaigns can share dozens of small donors); we only keep the ones that
-// bridge the most existing nodes, then the biggest by amount.
 const MAX_CONNECTORS = 12;
 
 const nodeTypes = { entity: EntityNode };
@@ -44,10 +40,6 @@ function radiusFor(type: "person" | "company"): number {
   return type === "person" ? 27 : 21;
 }
 
-/** POSTs JSON and parses the JSON response, but never throws: a network
- * hiccup, a non-2xx status, or a body that isn't valid JSON (e.g. an empty
- * response if a request got interrupted) all just resolve to `null` instead
- * of crashing the component with an unhandled rejection. */
 async function safeFetchJson<T = Record<string, unknown>>(
   url: string, body: unknown
 ): Promise<T | null> {
@@ -93,12 +85,12 @@ function GraphCanvasInner() {
   const [selected, setSelected] = useState<string | null>(null);
   const [minReais, setMinReais] = useState("");
   const [maxReais, setMaxReais] = useState("");
-  // Manually added nodes -- always visible, even if the amount filter would
-  // otherwise hide them. State (not a ref): read during render for the filter.
   const [roots, setRoots] = useState<Set<string>>(new Set());
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // Search-to-add, debounced + aborts the previous request on each keystroke.
+  const [expandFull, setExpandFull] = useState(false);
+  const [truncatedNotice, setTruncatedNotice] = useState<string | null>(null);
+
   const [searching, setSearching] = useState(false);
   const searchAbort = useRef<AbortController | null>(null);
   const onQueryChange = useCallback((value: string) => {
@@ -162,10 +154,6 @@ function GraphCanvasInner() {
       const brandNew = newInfos.filter((n) => !existingIds.has(n.cpfCnpj));
       const infoById = new Map(newInfos.map((n) => [n.cpfCnpj, n]));
 
-      // Patch already-on-canvas nodes with freshly-fetched authoritative data
-      // (kind/label/sanctioned) even when nothing about their position needs
-      // to change -- e.g. a node added as a bare placeholder gets its real
-      // "político" vs "pessoa física" classification here.
       const patched = currentNodes.map((n) => {
         const info = infoById.get(n.id);
         if (!info) return n;
@@ -173,12 +161,7 @@ function GraphCanvasInner() {
       });
       if (brandNew.length === 0) return patched;
 
-      // Left/right bias: for every new node, find the politician(s) it's
-      // wired to in this batch of edges. If it donated TO one, it belongs to
-      // its left; if it got paid BY one, it belongs to its right. Use the
-      // freshly-patched kind (infoById), not the stale one on currentNodes --
-      // otherwise a candidate added and expanded in the same click still
-      // reads as its old placeholder kind here and the bias never kicks in.
+      // Use infoById kind, not the stale one on currentNodes (node added and expanded in one click).
       const politicianX = new Map<string, number>();
       for (const n of currentNodes) {
         const kind = infoById.get(n.id)?.kind ?? n.data.kind;
@@ -188,7 +171,7 @@ function GraphCanvasInner() {
         if (n.kind === "politician") politicianX.set(n.cpfCnpj, WIDTH / 2);
       }
       const SIDE_OFFSET = 260;
-      const anchorX = new Map<string, number>(); // node id -> target x bias
+      const anchorX = new Map<string, number>();
       for (const e of allEdgesForLayout) {
         if (e.kind === "donation" && politicianX.has(e.target) && !politicianX.has(e.source)) {
           const px = politicianX.get(e.target)!;
@@ -223,9 +206,6 @@ function GraphCanvasInner() {
           .distance(160).strength(0.15))
         .force("charge", forceManyBody().strength(-380))
         .force("collide", forceCollide((d) => (d as SimNode).r + 34))
-        // Donors get pulled left of their politician, suppliers/recipients
-        // right of theirs -- keeps "de onde veio o dinheiro" / "pra onde foi"
-        // visually separated instead of a symmetric blob.
         .force(
           "x",
           forceX<SimNode>((d) => anchorX.get(d.id) ?? d.x).strength((d) => (anchorX.has(d.id) ? 0.22 : 0))
@@ -247,13 +227,6 @@ function GraphCanvasInner() {
     []
   );
 
-  // After a node is added: ask the backend for every link of distance <= 2
-  // between it and the entities already on the canvas (/api/graph-paths --
-  // direct edges + one-intermediary connector nodes). The backend hands back
-  // all connectors it finds; the FRONTEND is what keeps the canvas sane --
-  // it keeps only the MAX_CONNECTORS best ones (bridging the most existing
-  // nodes, then biggest amount), so a shared-donor-heavy pair of big
-  // campaigns can't dump 200 tiny nodes onto the screen at once.
   const findPaths = useCallback(
     (newId: string) => {
       setNodes((current) => {
@@ -266,12 +239,10 @@ function GraphCanvasInner() {
           const infos: GraphNodeInfo[] = data.nodes ?? [];
           const edgeRows: GraphEdgeRow[] = data.edges ?? [];
 
-          // Rank connector candidates -- a returned node not already on the
-          // canvas, scored by how many on-canvas nodes it bridges to.
           const bridges = new Map<string, { bridged: Set<string>; maxAmount: number }>();
           for (const e of edgeRows) {
             for (const [a, b] of [[e.source, e.target], [e.target, e.source]] as const) {
-              if (onCanvas.has(a)) continue; // `a` is a connector candidate
+              if (onCanvas.has(a)) continue;
               const rec = bridges.get(a) ?? { bridged: new Set<string>(), maxAmount: 0 };
               if (onCanvas.has(b)) rec.bridged.add(b);
               rec.maxAmount = Math.max(rec.maxAmount, e.amountCents);
@@ -309,6 +280,41 @@ function GraphCanvasInner() {
     [runLayout, setNodes, setEdges]
   );
 
+  const expandNode = useCallback(
+    (newId: string) => {
+      setNodes((current) => {
+        safeFetchJson<GraphQueryResponse & { truncated?: boolean }>("/api/graph-expand", { cpfCnpj: newId })
+          .then((data) => {
+            if (!data) return;
+            const infos: GraphNodeInfo[] = data.nodes ?? [];
+            const edgeRows: GraphEdgeRow[] = data.edges ?? [];
+            const idsAfter = new Set([...current.map((n) => n.id), ...infos.map((n) => n.cpfCnpj)]);
+
+            setNodes((cur) => runLayout(cur, infos, edgeRows));
+            setEdges((prev) => {
+              const byId = new Map(prev.map((e) => [e.id, e]));
+              for (const e of edgeRows) {
+                const id = edgeId(e.source, e.target, e.kind);
+                if (!byId.has(id)) {
+                  byId.set(id, {
+                    id, source: e.source, target: e.target, type: "floating",
+                    data: { amountCents: e.amountCents, kind: e.kind, circular: false, showLabel: true },
+                  });
+                }
+              }
+              return applyCircularStyling([...byId.values()], [...idsAfter]);
+            });
+            if (data.truncated) {
+              const label = infos.find((n) => n.cpfCnpj === newId)?.label ?? newId;
+              setTruncatedNotice(`${label}: mostrando só os 400 maiores vínculos.`);
+            }
+          });
+        return current;
+      });
+    },
+    [runLayout, setNodes, setEdges]
+  );
+
   const addNode = useCallback(
     (r: GraphSearchResult) => {
       setQ("");
@@ -317,8 +323,6 @@ function GraphCanvasInner() {
       setRoots((prev) => new Set(prev).add(r.cpfCnpj));
       setNodes((current) => {
         if (current.some((n) => n.id === r.cpfCnpj)) return current;
-        // Neutral placeholder, patched with the authoritative kind below --
-        // deliberately adds ONLY this one node, no donors/suppliers/network.
         const info: GraphNodeInfo = {
           cpfCnpj: r.cpfCnpj, type: r.type, kind: r.type === "person" ? "person" : "company",
           label: r.label, sanctioned: false, registryStatus: null, personId: null, photoUrl: null,
@@ -336,15 +340,13 @@ function GraphCanvasInner() {
           setNodes((nds) =>
             nds.map((n) => (n.id === r.cpfCnpj ? { ...n, data: { ...n.data, loading: false } } : n))
           );
-          findPaths(r.cpfCnpj);
+          if (expandFull) expandNode(r.cpfCnpj);
+          else findPaths(r.cpfCnpj);
         });
     },
-    [runLayout, findPaths, setNodes]
+    [runLayout, findPaths, expandNode, expandFull, setNodes]
   );
 
-  // ?add=cpf1,cpf2,... seeds the canvas on load -- used by the sinais pages
-  // ("ver no grafo") to open straight into the relevant nodes instead of
-  // making the user search for each one by hand.
   const searchParams = useSearchParams();
   const seededRef = useRef(false);
   useEffect(() => {
@@ -352,14 +354,7 @@ function GraphCanvasInner() {
     const raw = searchParams.get("add");
     if (!raw) return;
     seededRef.current = true;
-    // Deferred: addNode ultimately calls setState, and React disallows doing
-    // that synchronously inside an effect body (cascading-render lint). Uses
-    // queueMicrotask, NOT setTimeout+cleanup: React Strict Mode (on by
-    // default in `next dev`) mounts every effect twice -- run, cleanup, run
-    // again -- and a cleanup that cancels a pending setTimeout means the
-    // FIRST run's callback never fires (the ref guard then skips the
-    // second run too, since it's the same ref instance), so nothing gets
-    // seeded at all. A microtask can't be cancelled by that cleanup dance.
+    // queueMicrotask, not setTimeout: Strict Mode's effect cleanup would cancel the first run.
     queueMicrotask(() => {
       for (const id of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
         const type: "person" | "company" = id.length === 14 ? "company" : "person";
@@ -368,10 +363,6 @@ function GraphCanvasInner() {
     });
   }, [searchParams, addNode]);
 
-  // Clicking a node only selects it (shows the side panel) -- it no longer
-  // pulls in that node's whole donor/supplier network. See runCorrelate:
-  // relations between nodes already on the canvas are found automatically
-  // on every add, so there's nothing left for a click to "expand".
   const onNodeClick: NodeMouseHandler<FlowNode> = useCallback((_evt, node) => {
     setSelected(node.id);
   }, []);
@@ -402,9 +393,6 @@ function GraphCanvasInner() {
   const labelFor = (id: string) => nodes.find((n) => n.id === id)?.data.label ?? id;
   const circularCount = edges.filter((e) => e.data?.circular).length;
 
-  // Movimentação mínima/máxima -- filters the RENDERED subset only, never the
-  // underlying nodes/edges state (so removing the filter doesn't lose data
-  // that would otherwise need a re-fetch).
   const minCents = minReais.trim() === "" ? null : Math.round(Number(minReais) * 100);
   const maxCents = maxReais.trim() === "" ? null : Math.round(Number(maxReais) * 100);
   const amountFilterActive =
@@ -467,6 +455,18 @@ function GraphCanvasInner() {
             </div>
           ) : null}
         </div>
+        <label
+          className="flex items-center gap-1.5 cursor-pointer select-none"
+          title="Ao adicionar, traz TODOS os vínculos diretos desse nó (doadores, fornecedores, candidatos), não só os que conectam com o que já está na tela."
+        >
+          <input
+            type="checkbox"
+            checked={expandFull}
+            onChange={(e) => setExpandFull(e.target.checked)}
+            className="accent-[var(--accent)]"
+          />
+          <span className="mono-label !text-[var(--muted-2)]">trazer rede inteira</span>
+        </label>
         <div className="flex items-center gap-1.5">
           <span className="mono-label !text-[var(--muted-2)]">movimentação</span>
           <input
@@ -505,6 +505,15 @@ function GraphCanvasInner() {
             {circularCount} em doação circular
           </span>
         ) : null}
+        {truncatedNotice ? (
+          <button
+            onClick={() => setTruncatedNotice(null)}
+            className="mono-label !text-elo-amber"
+            title="clique pra dispensar"
+          >
+            ⚠ {truncatedNotice}
+          </button>
+        ) : null}
         {nodes.length > 0 ? (
           <button onClick={clearAll} className="mono-label ml-auto !text-[var(--muted)] hover:!text-[var(--fg-2)]">
             limpar tudo
@@ -517,10 +526,10 @@ function GraphCanvasInner() {
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
             <div className="text-[18px] font-light text-[var(--muted)]">Adicione um candidato ou empresa</div>
             <p className="max-w-md text-[13px] leading-relaxed text-[var(--muted-2)]">
-              Busque acima ou cole um CPF/CNPJ — cada busca adiciona só aquele nó, nada de rede
-              inteira junto. Ao adicionar o próximo, o grafo procura um caminho de até 2 passos
-              entre ele e o que já está na tela (ligação direta, ou por um doador/fornecedor/
-              candidato em comum) e traz só esse caminho.
+              Busque acima ou cole um CPF/CNPJ — por padrão, cada busca adiciona só aquele nó, e ao
+              adicionar o próximo o grafo traz apenas o caminho de até 2 passos entre eles (ligação
+              direta, ou por um doador/fornecedor/candidato em comum). Ligue &ldquo;trazer rede
+              inteira&rdquo; se quiser que cada nó adicionado já venha com TODOS os seus vínculos diretos.
             </p>
           </div>
         ) : (

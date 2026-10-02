@@ -1,27 +1,4 @@
-"""A cheap LLM second opinion on detection signals (DeepSeek).
-
-`circular_donations` alone produced 108k signals against the real base, and
-most of them "fazem sentido" -- money moving inside a coligação, a party
-account funding its own candidates, a supplier that also chipped in a small
-donation. This job hands the facts of a signal to an LLM and asks a single
-question: is this ROTINEIRO or GENUINAMENTE ESTRANHO? -- so a human can start
-from the handful the model flagged instead of scrolling 108k rows.
-
-It reviews two rules:
-  - circular_donations       -> is the loop weird, or explainable?
-  - disproportionate_expense -> is the price way above market for the item?
-
-NOT rewrite-only and NOT a rule (no rule_run). It's an incremental cache in
-`signal_ai_review`, one row per (signal, model): re-run to review more
-signals; `--refresh` re-reviews ones already done. Signals are picked
-biggest-money-first, so a `--limit` cap covers the ones that matter most.
-
-The model's answer is stored verbatim (`raw_response`) next to the exact
-prompt (`prompt`). It is still an indício -- now with a machine's opinion
-attached -- never a verdict. The prompt tells the model as much.
-
-Run: `elosys ai-review --db elosys.db --limit 50` (needs DEEPSEEK_API_KEY).
-"""
+"""A cheap LLM second opinion on detection signals (DeepSeek)."""
 
 from __future__ import annotations
 
@@ -160,8 +137,6 @@ def _select_signals(
             "(SELECT s.id FROM signal s JOIN rule_run r ON r.id = s.rule_run_id WHERE r.rule = ?)",
             (model, rule),
         )
-    # circular_donations has signal.amount_cents + signal.path_length; for
-    # disproportionate_expense the amount lives on the evidence expense row.
     amount_expr = (
         "coalesce(s.amount_cents, 0)"
         if rule == "circular_donations"
@@ -169,17 +144,12 @@ def _select_signals(
                "JOIN campaign_expense ce ON ce.id = se.record_id "
                "WHERE se.signal_id = s.id AND se.table_name = 'campaign_expense' LIMIT 1)")
     )
-    # "tight": the shortest cycles first (a 2-hop loop between two entities is
-    # a lot more suspicious than a 5-hop one, and short ones aren't dominated
-    # by party-committee distributions) -- then by money. "amount": pure
-    # biggest-money-first (surfaces the party-account cases, which the model
-    # tends to call plausible -- useful as a sanity check).
     if rule == "circular_donations" and order == "tight":
         order_by = f"coalesce(s.path_length, 99) ASC, {amount_expr} DESC"
     else:
         order_by = f"{amount_expr} DESC"
     rows = con.execute(
-        f"SELECT s.id, s.explanation FROM signal s "  # noqa: S608 (all exprs are fixed literals)
+        f"SELECT s.id, s.explanation FROM signal s "  # noqa: S608
         f"JOIN rule_run r ON r.id = s.rule_run_id "
         f"WHERE r.rule = ? AND s.id NOT IN (SELECT signal_id FROM signal_ai_review WHERE model = ?) "
         f"AND {amount_expr} >= ? "

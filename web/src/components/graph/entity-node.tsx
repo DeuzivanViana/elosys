@@ -4,29 +4,15 @@ import { useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { NODE_COLOR, NODE_KIND_LABEL, type GraphNodeData } from "./types";
 
-/**
- * Circle + label, stacked. The candidate whose page this is ("self") is
- * always gold and drawn bigger; other politicians stay violet — visually
- * unmistakable from any company node, whatever its own color (doador verde,
- * fornecedor violeta claro, sancionado vermelho). A node flagged `circular`
- * (money flowed both to and from it) gets a red ring regardless of kind —
- * that ring, not the fill color, is what says "doação circular aqui". Click
- * expands the node's network (handled by the parent via onNodeClick); this
- * component only renders.
- */
 export function EntityNode({ data, selected }: NodeProps & { data: GraphNodeData }) {
   const color = NODE_COLOR[data.kind];
   const d = data.radius * 2;
   const big = data.kind === "politician" || data.kind === "self";
   const ringColor = data.circular ? "var(--red)" : color.stroke;
-  // Photo only for the plain case -- a flagged node (loading/circular/
-  // sanctioned) keeps its warning icon front and center rather than being
-  // softened into a friendly headshot.
   const showPhoto = big && !data.loading && !data.circular && !data.sanctioned && data.photoUrl != null;
 
   return (
     <div className="flex w-[132px] flex-col items-center gap-1.5" title={data.label}>
-      {/* invisible handles at every side so floating edges can attach from any direction */}
       <Handle type="source" position={Position.Top} id="s" style={handleStyle} />
       <Handle type="target" position={Position.Top} id="t" style={handleStyle} />
 
@@ -72,9 +58,7 @@ export function EntityNode({ data, selected }: NodeProps & { data: GraphNodeData
   );
 }
 
-// The URL is a direct TSE CDN link (divulgacandcontas.tse.jus.br) -- an
-// undocumented internal endpoint (see schema.sql's note on candidate_photo),
-// so it can 404 or break without warning; falls back to the star then.
+// TSE CDN URL is undocumented and can 404; falls back to the star.
 function NodePhoto({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <span className="text-[13px]">★</span>;

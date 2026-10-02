@@ -1,23 +1,4 @@
-"""Enrichment: BrasilAPI CNPJ lookup -> company_registry + company_partner.
-
-BrasilAPI (https://brasilapi.com.br/api/cnpj/v1/{cnpj}) proxies the Receita
-Federal CNPJ registry: legal name, opening date, registry status, capital,
-CNAE, address — and the quadro societário (`qsa`): every partner on record,
-with name, role and the date they joined.
-
-This is the "quem é dono de quem" data the README's "empresa de fachada"
-signal needs, and it's the one source in this project that is genuinely NOT
-rewrite-only — see the long comment in schema.sql above `company_registry`.
-In short: it's a rate-limited lookup API, one company at a time, so `run()`
-is an incremental cache that only fetches companies missing a row here (or
-an explicit `cnpjs` list), and can be re-run repeatedly to fill in more of
-the catalog over time without re-fetching what's already cached.
-
-Partner CPFs come back masked ("***498538**") by the source itself — we
-never try to match that to `people.cpf` (see ADs/identidade.md: no
-name-only or partial-CPF identity matching). `company_partner.partner_name`
-is stored as plain text for a human to read and cross-check.
-"""
+"""Enrichment: BrasilAPI CNPJ lookup -> company_registry + company_partner."""
 
 from __future__ import annotations
 
@@ -37,18 +18,9 @@ PARSER_VERSION = "1.0"
 
 URL_TEMPLATE = "https://brasilapi.com.br/api/cnpj/v1/{cnpj}"
 DEFAULT_LIMIT = 500
-DEFAULT_ORDER = "money"  # 'money' = biggest supplier/donor first; 'id' = insertion order (skips the ~50s ranking scan)
-DEFAULT_DELAY_SECONDS = 0.4  # politeness delay between requests; not a published rate limit
+DEFAULT_ORDER = "money"
+DEFAULT_DELAY_SECONDS = 0.4
 
-# One HTTP request per CNPJ against BrasilAPI, so we can only ever cover a
-# slice -- prioritise the companies whose money actually matters. This ranks
-# every not-yet-fetched company by (total received as a campaign supplier +
-# total given as a campaign donor) and takes the top `limit`. The GROUP BYs
-# scan campaign_expense/campaign_donation once (~50s on the full base), which
-# is why the default limit is 500, not 20 -- run it with a big limit so that
-# ranking cost is amortised. Campaign-committee CNPJs (natureza 409-4) are
-# skipped by default: a committee's "founding date" is just "right before the
-# election", not an analytically interesting fact.
 _MONEY_RANKED_QUERY = """
 WITH m AS (
   SELECT supplier_company_id AS cid, sum(amount_cents) AS tot
@@ -105,7 +77,7 @@ def run(con: sqlite3.Connection, *, limit: int = DEFAULT_LIMIT,
                     _MONEY_RANKED_QUERY.format(kind_filter=kind_filter), (limit,)
                 )
             ]
-    else:  # order == "id": insertion order, skips the ranking scan
+    else:
         campaign_filter = "" if include_campaign else "AND c.kind IS NOT 'campaign'"
         targets = [
             dict(r) for r in con.execute(
@@ -156,10 +128,10 @@ def _fetch_one(con: sqlite3.Connection, source_id: int, company_id: int, cnpj: s
     path = tmp_dir / f"brasilapi_cnpj_{cnpj}.json"
     try:
         status, ctype = download(url, path)
-    except Exception as e:  # noqa: BLE001 (a bad/baixado CNPJ, timeout, 4xx... must not kill the batch)
+    except Exception as e:  # noqa: BLE001
         path.unlink(missing_ok=True)
         if "404" in str(e):
-            return "not_found"  # CNPJ not in the Receita registry (invalid or never existed)
+            return "not_found"
         log.warning("  %s: %s", cnpj, e)
         return "error"
 
@@ -216,7 +188,6 @@ def _write_registry(con: sqlite3.Connection, company_id: int, cnpj: str, payload
             "collected_at": now_utc(),
         },
     )
-    # also backfill companies.legal_name if we didn't have one yet
     con.execute(
         "UPDATE companies SET legal_name = :legal_name "
         "WHERE id = :company_id AND legal_name IS NULL",

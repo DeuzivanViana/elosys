@@ -11,25 +11,12 @@ function readEffectiveTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
-// Minimal typing for the bits of the View Transitions API this uses — not
-// yet in TS's built-in DOM lib.
+// Minimal typing for the View Transitions API (not in TS's DOM lib yet).
 type ViewTransition = { ready: Promise<void> };
 type DocumentWithViewTransitions = Document & { startViewTransition?: (cb: () => void) => ViewTransition };
 
-/** Defaults to the device's own preference (globals.css handles that part
- * with a plain `@media` query, no JS needed) — this only comes into play
- * once someone picks an explicit theme, which then overrides the device
- * default via `data-theme` + localStorage (see layout.tsx's no-flash
- * script for how that's applied before hydration on future loads).
- *
- * The switch itself animates with the View Transitions API: a circle grows
- * from the button out to cover the screen, revealing the new theme —
- * browsers without support (older Safari/Firefox) just flip instantly,
- * same as before. */
 export function ThemeToggle() {
-  // Unknown until mount: the server can't know the device's preference, so
-  // rendering a guess here would mismatch hydration. The button is inert
-  // for one frame, then reflects reality.
+  // Unknown until mount: guessing on the server would mismatch hydration.
   const [theme, setTheme] = useState<Theme | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -37,7 +24,6 @@ export function ThemeToggle() {
     const raf = requestAnimationFrame(() => setTheme(readEffectiveTheme()));
     const mq = window.matchMedia("(prefers-color-scheme: light)");
     const onSystemChange = () => {
-      // Only follow the device if the user never overrode it explicitly.
       if (!localStorage.getItem("theme")) setTheme(readEffectiveTheme());
     };
     mq.addEventListener("change", onSystemChange);
@@ -63,9 +49,6 @@ export function ThemeToggle() {
       return;
     }
 
-    // Grow the circle from the button's own center, out to whichever
-    // corner is farthest — that's always enough radius to cover the
-    // viewport no matter where the toggle sits.
     const rect = btnRef.current?.getBoundingClientRect();
     const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
     const y = rect ? rect.top + rect.height / 2 : 0;

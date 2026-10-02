@@ -4,30 +4,11 @@ import { BaseEdge, EdgeLabelRenderer, useInternalNode, type EdgeProps } from "@x
 import { formatBRL } from "@/lib/format";
 import type { GraphEdgeData } from "./types";
 
-// How far a curve bows away from the straight line between two nodes, as a
-// fraction of their distance (clamped so it's neither invisible up close
-// nor absurd far away).
 const BEND_RATIO = 0.16;
 const BEND_MIN = 14;
 const BEND_MAX = 44;
 
-/**
- * A "floating" edge: source/target handles anchor at the node's actual
- * bounding circle, computed from the current node positions, so the line
- * always points straight at the other node's edge — not at a fixed handle
- * — regardless of where the force layout (or a manual drag) puts them.
- *
- * Always drawn as a slight curve, never a straight line, bowing to a fixed
- * side *of the direction of travel* (always "clockwise" from source to
- * target). That's the whole trick: when money flows both ways between the
- * same two entities (a donation back AND a payment forward, or a 2-node
- * circular_donation cycle), the reverse edge travels in the opposite
- * direction, so its perpendicular flips automatically — the two edges bow
- * to opposite absolute sides without needing to special-case "is this the
- * reverse edge of some other edge". Don't also sign this off the node ids:
- * that would flip a *second* time for the reverse edge and cancel back out
- * to the same side, undoing the whole point.
- */
+// Curve always bows clockwise from source to target; flipping by node ids too would cancel it.
 export function FloatingEdge(props: EdgeProps & { data?: GraphEdgeData }) {
   const { id, source, target, style, markerEnd, data } = props;
   const sourceNode = useInternalNode(source);
@@ -46,7 +27,7 @@ export function FloatingEdge(props: EdgeProps & { data?: GraphEdgeData }) {
 
   const sourceX = sc.x + ux * (sr + 2);
   const sourceY = sc.y + uy * (sr + 2);
-  const targetX = tc.x - ux * (tr + 10); // extra gap so the arrowhead doesn't sit under the circle
+  const targetX = tc.x - ux * (tr + 10);
   const targetY = tc.y - uy * (tr + 10);
 
   const bend = Math.min(Math.max(dist * BEND_RATIO, BEND_MIN), BEND_MAX);
@@ -56,7 +37,6 @@ export function FloatingEdge(props: EdgeProps & { data?: GraphEdgeData }) {
   const midY = (sourceY + targetY) / 2 + perpY * bend;
 
   const path = `M${sourceX},${sourceY} Q${midX},${midY} ${targetX},${targetY}`;
-  // Point on the quadratic curve at t=0.5 — where the amount label sits.
   const labelX = 0.25 * sourceX + 0.5 * midX + 0.25 * targetX;
   const labelY = 0.25 * sourceY + 0.5 * midY + 0.25 * targetY;
 
@@ -81,9 +61,7 @@ export function FloatingEdge(props: EdgeProps & { data?: GraphEdgeData }) {
   );
 }
 
-// The node box is a circle (of `radius`) stacked above its text label -- the
-// circle's own center is NOT the box's center (the label below throws that
-// off), so anchor on (boxWidth/2, radius) instead of (boxWidth/2, boxHeight/2).
+// Circle center is (boxWidth/2, radius), not the box center, because the label sits below.
 function centerOf(node: ReturnType<typeof useInternalNode>, radius: number): { x: number; y: number } {
   const width = node!.measured?.width ?? radius * 2;
   return {

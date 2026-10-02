@@ -1,24 +1,4 @@
-"""Crawler: TSE declared assets (bem_candidato) -> declared_assets.
-
-Source zip (one per election year):
-  https://cdn.tse.jus.br/estatistica/sead/odsele/bem_candidato/bem_candidato_{year}.zip
-
-The wealth declared *at candidacy registration* — one row per asset (imóvel,
-veículo, aplicação financeira, participação societária...). This file has
-**no CPF at all**, only `SQ_CANDIDATO` — identity here is a plain lookup
-against `politician_history`, same as `tse/social.py`, no CPF fallback
-possible even if we wanted one.
-
-This is the base data for the "enriquecimento incompatível" signal from the
-README: sum `value_cents` per person per year and compare growth across
-elections against income/donations. That comparison is not computed here —
-this crawler only loads the raw declared values (see ADs/politician.md §3).
-
-This crawler is independent: `run()` wipes only what it owns
-(`declared_assets`) and rebuilds. It reads `politician_history` to resolve
-`person_id`/`history_id`, but does not require it to run first — a candidacy
-not seen there yet just gets both as NULL and a warning.
-"""
+"""Crawler: TSE declared assets (bem_candidato) -> declared_assets."""
 
 from __future__ import annotations
 
@@ -43,7 +23,7 @@ from ..util import brl_to_cents, clean_tse, iso_date, now_utc
 log = get_logger("elosys.tse.assets")
 
 PARSER_NAME = "tse.assets"
-PARSER_VERSION = "1.0"  # 1.0: declared_assets from bem_candidato
+PARSER_VERSION = "1.0"
 
 URL_TEMPLATE = "https://cdn.tse.jus.br/estatistica/sead/odsele/bem_candidato/bem_candidato_{year}.zip"
 SUPPORTED_YEARS = (2014, 2016, 2018, 2020, 2022, 2024, 2026)

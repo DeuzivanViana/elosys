@@ -1,62 +1,4 @@
-"""Detection rule: doação circular — money that leaves a politician's own
-campaign and eventually comes back into the same identity graph, through a
-loop of donations and/or expenses (A financia B, B financia C, C financia A).
-
-Method (v1.0):
-  1. Build a directed graph over the SAME identity space the /grafo web page
-     uses (raw cpf/cnpj strings, see web/src/lib/queries.ts): a
-     campaign_donation row gives an edge donor -> politician (their campaign
-     received it); a campaign_expense row gives an edge politician ->
-     supplier (their campaign paid it out). Both are resolved straight to
-     the candidate's own cpf via campaign_org.person_id — the intermediate
-     campaign CNPJ shell is skipped, so the loop is about the PEOPLE/
-     COMPANIES actually moving money, not the accounting entity in between.
-     This is a two-step resolve (campaign_org_id -> cpf first, in memory)
-     rather than one big SQL JOIN, because campaign_donation/campaign_expense
-     together are ~14.6M rows — cheaper to stream each table once and look
-     the cpf up in a small dict than to make SQLite join+DISTINCT all of it.
-  2. Run Tarjan's strongly-connected-components algorithm (iterative, O(V+E),
-     no recursion so no stack-depth limit) over the deduplicated edge set to
-     find which nodes can even reach a cycle at all — a node not in a
-     nontrivial SCC (size > 1) can never be part of one, so this prunes the
-     overwhelming majority of the graph (hundreds of thousands of
-     politicians, millions of donors/suppliers who only ever appear on one
-     side of one transaction) before any expensive search starts.
-  3. Within each nontrivial SCC, enumerate SIMPLE cycles up to `max_depth`
-     edges long via a depth-bounded DFS from every node (Johnson-style: only
-     extend to neighbors with a larger id than the cycle's start node, so
-     each cycle is only ever found once, from its smallest-id member).
-
-  `max_depth` (default DEFAULT_MAX_DEPTH = 5) is the one real knob, per an
-  explicit product decision: searching for ALL simple cycles of ANY length in
-  a real financial network is exponential in the worst case (a party's
-  central treasury account alone can have thousands of edges), so this only
-  looks for loops of up to 5 hops — long enough to catch "A -> B -> C -> A"
-  -style layering, short enough to stay tractable on the full database.
-
-  `max_fanout` (default DEFAULT_MAX_FANOUT = 400) is a second, coarser safety
-  valve: once inside an SCC, a node with more outgoing edges than that is
-  almost certainly a hub (a big party account, a large campaign committee)
-  rather than a party to a specific circular-financing scheme — searching
-  doesn't branch OUT through it (it can still be a normal endpoint reached
-  BY the search, just not a pivot the DFS fans out from), which is what
-  keeps a single run bounded even though the underlying tables have ~14.6M
-  rows. Every SCC skipped or pruned this way is counted and reported in the
-  run's return dict / report JSON, so a capped run is visible, not silent.
-
-  This can't tell you WHY money went in a circle — could be an honest
-  correction, a loan repaid, a joint venture between two campaigns of the
-  same coalition — it only points at the loop. Indício, não prova.
-
-Rewrite-only: run() deletes only the signals THIS rule produced
-(rule_run.rule = 'circular_donations') and regenerates them from the current
-campaign_donation/campaign_expense tables. Every signal traces to the actual
-donation/expense rows that make up each edge in the loop via signal_evidence.
-
-Run directly (this is the "algoritmo em Python local" — no web server
-involved): `python -m elosys.rules.circular_donations --db elosys.db`, or via
-`elosys rule-circular-donations --db elosys.db [--max-depth N]`.
-"""
+"""Detection rule: doação circular — money that leaves a politician's own"""
 
 from __future__ import annotations
 
@@ -73,43 +15,20 @@ from ..util import git_commit, now_utc
 log = get_logger("elosys.rules.circular_donations")
 
 RULE_NAME = "circular_donations"
-RULE_VERSION = "1.1"  # 1.1: min_amount_cents floor, so a R$20 cycle doesn't generate a signal
+RULE_VERSION = "1.1"
 
 DEFAULT_MAX_DEPTH = 5
 DEFAULT_MAX_FANOUT = 400
-# A cycle's total movement below this is noise, not a signal worth a human's
-# time -- was previously only handled by sorting in the UI (see
-# ADs/dados_derivados.md §1.2), which still generated (and stored) a signal
-# for every R$20 cycle. Filtered here instead, in the rule itself, so
-# `rule_run.rows_generated` and the signal count actually reflect what's
-# worth looking at.
-DEFAULT_MIN_AMOUNT_CENTS = 1_000_000  # R$ 10.000,00
+DEFAULT_MIN_AMOUNT_CENTS = 1_000_000
 
-# A cycle this short (<= this many edges) is a tight loop between very few
-# parties -- flagged high; longer ones (up to max_depth) are still worth a
-# look but more likely to be an artifact of a shared intermediary -- medium.
 HIGH_SEVERITY_MAX_LEN = 3
 
-# How many underlying campaign_donation/campaign_expense rows to cite as
-# evidence per edge in a found cycle. An edge can be backed by dozens of
-# separate transactions (repeat donations); citing all of them is not
-# necessary for "indício, não prova" traceability -- a bounded sample is.
 EVIDENCE_ROWS_PER_EDGE = 10
 
 
 def _build_graph(
     con: sqlite3.Connection,
 ) -> tuple[list[str], dict[int, list[int]], dict[tuple[int, int], str], dict[tuple[int, int], int]]:
-    """Returns (id_to_cpf_cnpj, adjacency, edge_kind, edge_amount_cents).
-
-    edge_kind maps (src_id, dst_id) -> "donation" | "payment" | "both" (both
-    directions of money existed between the exact same two entities in that
-    exact order -- rare, but keep the fact rather than pick one).
-    edge_amount_cents is the SUM of every underlying donation/expense row
-    that makes up that edge -- the exact total, not the sampled subset later
-    cited as signal_evidence (see EVIDENCE_ROWS_PER_EDGE), so "valor
-    movimentado" on a found cycle is a real number, not an undercount.
-    """
     node_id: dict[str, int] = {}
     id_to_node: list[str] = []
 
@@ -121,7 +40,6 @@ def _build_graph(
             id_to_node.append(key)
         return i
 
-    # campaign_org_id -> candidate's own cpf. Small (~1M rows), read once.
     with step(log, "resolve campaign_org -> candidate cpf"):
         org_cpf: dict[int, str] = {
             row[0]: row[1]
@@ -138,7 +56,7 @@ def _build_graph(
 
     def add_edge(src: str, dst: str, kind: str, amount: int | None) -> None:
         if src == dst:
-            return  # self-financing isn't a loop through anyone else
+            return
         s, d = get_id(src), get_id(dst)
         key = (s, d)
         amount = amount or 0
@@ -188,7 +106,6 @@ def _build_graph(
 
 
 def _tarjan_scc(n: int, adj: dict[int, list[int]]) -> list[list[int]]:
-    """Iterative Tarjan's SCC (no recursion -- n can be in the millions)."""
     index_of = [-1] * n
     lowlink = [0] * n
     on_stack = [False] * n
@@ -199,7 +116,6 @@ def _tarjan_scc(n: int, adj: dict[int, list[int]]) -> list[list[int]]:
     for start in range(n):
         if index_of[start] != -1:
             continue
-        # (node, iterator index into adj[node]) work stack for the DFS itself.
         work: list[tuple[int, int]] = [(start, 0)]
         index_of[start] = counter
         lowlink[start] = counter
@@ -245,11 +161,6 @@ def _find_cycles_in_scc(
     max_depth: int,
     max_fanout: int,
 ) -> tuple[list[list[int]], int]:
-    """Simple cycles of length 2..max_depth within one SCC's induced subgraph.
-
-    Returns (cycles, hub_nodes_skipped). Each cycle is a list of node ids,
-    e.g. [a, b, c] meaning a->b->c->a.
-    """
     members = set(scc_nodes)
     induced: dict[int, list[int]] = {
         v: [w for w in adj.get(v, ()) if w in members] for v in scc_nodes
@@ -263,10 +174,6 @@ def _find_cycles_in_scc(
 
 
 class _CycleSearchState:
-    """Plain holder for the search's shared, mutable state -- passed explicitly
-    (not closed over) so the recursive helper doesn't trip B023-style "which
-    loop iteration does this variable belong to" ambiguity."""
-
     def __init__(self, induced: dict[int, list[int]], max_depth: int, max_fanout: int,
                  cycles: list[list[int]], hub_skipped: int) -> None:
         self.induced = induced
@@ -279,16 +186,9 @@ class _CycleSearchState:
 def _dfs_from(state: _CycleSearchState, start: int, current: int, path: list[int], visited: set[int]) -> None:
     neighbors = state.induced.get(current, ())
     if len(neighbors) > state.max_fanout and current != start:
-        # Hub node inside its own SCC (e.g. a party account) -- don't fan out
-        # through it, just note it and move on. It can still be found as a
-        # direct 2-cycle from `start` (a plain membership check below, not
-        # branching), just not used as a pivot for longer ones.
         state.hub_skipped += 1
         return
     for nxt in neighbors:
-        # Closure check runs regardless of depth -- even a path already at
-        # max_depth can still close back to `start` right here, it just
-        # can't grow past max_depth by visiting one more NEW node (below).
         if nxt == start and len(path) >= 2:
             state.cycles.append(list(path))
         elif len(path) < state.max_depth and nxt > start and nxt not in visited:
@@ -375,18 +275,10 @@ def run(con: sqlite3.Connection, *, max_depth: int = DEFAULT_MAX_DEPTH,
 
 
 class _WriteCache:
-    """Memoizes the per-node/per-edge lookups `_write_cycle_signal` needs,
-    across the ENTIRE write phase (not per cycle). Real cycles reuse the same
-    handful of entities and edges over and over (that's what a nontrivial SCC
-    is), so this turns what would be ~10 SQL round-trips per cycle into a
-    handful of round-trips per *unique* actor/edge -- the difference between
-    the write phase taking ~22 minutes and a couple of minutes for ~100k
-    cycles found against the real database."""
-
     def __init__(self) -> None:
         self.name: dict[str, str | None] = {}
-        self.actor: dict[str, tuple[str, int] | None] = {}  # cpf/cnpj -> (type, actor_id)
-        self.evidence: dict[tuple[str, str, str], list[tuple[str, int]]] = {}  # (src, dst, kind) -> [(table, id)]
+        self.actor: dict[str, tuple[str, int] | None] = {}
+        self.evidence: dict[tuple[str, str, str], list[tuple[str, int]]] = {}
 
 
 def _name_for(con: sqlite3.Connection, cpf_cnpj: str, cache: _WriteCache) -> str | None:
@@ -512,9 +404,6 @@ def _reset(con: sqlite3.Connection) -> None:
         "(SELECT s.id FROM signal s JOIN rule_run r ON r.id = s.rule_run_id WHERE r.rule = ?)",
         (RULE_NAME,),
     )
-    # signal_ai_review is a separate, non-rule cache (ai_review.py) that also
-    # references signal(id) -- deleting signal without clearing it first trips
-    # the FK constraint whenever ai-review has already run over old signals.
     con.execute(
         "DELETE FROM signal_ai_review WHERE signal_id IN "
         "(SELECT s.id FROM signal s JOIN rule_run r ON r.id = s.rule_run_id WHERE r.rule = ?)",

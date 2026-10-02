@@ -18,7 +18,7 @@ ELOSYS_DB_PATH=/caminho/para/outro.db npm run dev
 ```
 
 Se `elosys.db` não existir ainda, rode o pipeline Python primeiro (ver
-[README raiz](../README.md#rodando)).
+[README raiz](../README.md#rodar-com-banco-de-dados)).
 
 ## Como está organizado
 

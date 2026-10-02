@@ -47,10 +47,7 @@ export default async function SocioFornecedorPage({ searchParams }: PageProps<"/
       <PageHeader group="Sinais" current="Sócio de fornecedor" />
 
       <section>
-        <div className="mono-label">
-          elosys/rules/candidate_supplier_partner.py · cruzamento derivado
-        </div>
-        <h1 className="mt-3 text-[26px] leading-tight font-medium tracking-tight">
+        <h1 className="text-[26px] leading-tight font-medium tracking-tight">
           Candidato sócio de uma empresa que recebeu dinheiro de campanha
         </h1>
         <p className="mt-4 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>
@@ -126,9 +123,6 @@ export default async function SocioFornecedorPage({ searchParams }: PageProps<"/
                       <Link href={`/politico/${r.personId}`} className="hover:underline">
                         {r.personName ?? "candidato"}
                       </Link>
-                      <div className="mono-label" style={{ fontSize: 8, color: "var(--muted-2)" }}>
-                        correspondência não confirmada
-                      </div>
                     </td>
                     <td className="max-w-[240px]">
                       <Link href={`/cnpj/${r.companyCnpj}`} className="hover:underline">

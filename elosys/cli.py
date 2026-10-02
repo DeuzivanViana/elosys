@@ -1,29 +1,4 @@
-"""Elosys CLI — one independent crawler per data source (see ADs/imutabilidade.md).
-
-    elosys init-db          --db elosys.db
-    elosys tse-candidates   --db elosys.db --years 2018,2020,2022,2024,2026
-    elosys tse-accounts     --db elosys.db --years 2018,2020,2022,2024,2026
-    elosys tse-social       --db elosys.db --years 2018,2020,2022,2024,2026
-    elosys tse-assets       --db elosys.db --years 2014,2016,2018,2020,2022,2024,2026
-    elosys transparencia-sanctions --db elosys.db   (CEIS/CNEP; daily snapshot, no --years)
-    elosys transparencia-earmarks --db elosys.db   (Emendas Parlamentares; arquivo unico, todo o historico)
-    elosys receita-cnpj     --db elosys.db --limit 200   (incremental; NOT rewrite-only, see schema.sql)
-    elosys tse-photo-urls   --db elosys.db --limit 500   (incremental; NOT rewrite-only, see schema.sql)
-    elosys manifest         --db elosys.db --out manifest.json
-    elosys verify           --db elosys.db      (re-downloads sources, checks hashes)
-    elosys rule-disproportionate-expense --db elosys.db
-    elosys rule-circular-donations --db elosys.db --max-depth 5
-    elosys ai-review --db elosys.db --limit 100   (opcional; precisa de DEEPSEEK_API_KEY)
-
-Each crawler is rewrite-only: it wipes the tables it owns and rebuilds them from
-the public files. Run them in any order; `tse-accounts` links identity better if
-`tse-candidates` ran first. Every run refreshes `manifest.json` and writes a
-`<crawler>_report.json` — commit both.
-
-Detection rules (see ADs/dados_derivados.md) are also rewrite-only: each run
-wipes only ITS OWN past signals and regenerates them from whatever is in the
-tables right now — run a rule again after re-running a crawler it depends on.
-"""
+"""Elosys CLI — one independent crawler per data source (see ADs/imutabilidade.md)."""
 
 from __future__ import annotations
 
@@ -60,7 +35,7 @@ def _init_db(args: argparse.Namespace) -> int:
 
 def _run_crawler(args: argparse.Namespace, module, name: str) -> int:
     db = Path(args.db)
-    create_schema(db)  # idempotent (all IF NOT EXISTS); adds any new tables to an existing db
+    create_schema(db)
     years = [int(y) for y in args.years.split(",")] if args.years else None
     con = connect(db, write=True)
     try:
@@ -146,7 +121,7 @@ def _run_photo_urls(args: argparse.Namespace) -> int:
 
 def _run_rule(args: argparse.Namespace, module, name: str) -> int:
     db = Path(args.db)
-    create_schema(db)  # idempotent; adds rule_run/signal/... to an existing db
+    create_schema(db)
     con = connect(db, write=True)
     try:
         report = module.run(con)

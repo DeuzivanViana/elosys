@@ -6,9 +6,6 @@ import { formatBRL } from "@/lib/format";
 import { Modal } from "./ui/modal";
 import { SourceZone } from "./source-zone";
 
-/** A card per election year with declared assets — click one to see that
- * year's individual items in a modal, instead of dumping every asset from
- * every year in one long flat list below the chart. */
 export function AssetsYearCards({
   byYear, assets,
 }: { byYear: DeclaredAssetsYearSummary[]; assets: DeclaredAsset[] }) {

@@ -13,10 +13,6 @@ type Ctx = {
   setHeader: (h: PageHeaderState) => void;
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
-  /** "modo análise de fonte" — toggled from the navbar's "fonte" button.
-   * While on, any <SourceZone> highlights on hover and a click opens its
-   * provenance popup instead of the zone's normal behavior (link/button).
-   * Off by default so the app behaves normally. */
   analysisMode: boolean;
   setAnalysisMode: (on: boolean) => void;
 };
@@ -43,11 +39,6 @@ export function useShell(): Ctx {
   return ctx;
 }
 
-/**
- * Server Components render this to feed the topbar breadcrumb/actions
- * without themselves becoming Client Components — it's a small client
- * island that just pushes its props into ShellCtx on mount/update.
- */
 export function PageHeader({ group, current, actions }: PageHeaderState) {
   const { setHeader } = useShell();
   useEffect(() => {

@@ -26,11 +26,6 @@ function ChartTooltip({ active, payload }: TooltipContentProps) {
   );
 }
 
-/** Patrimônio total declarado por ano de candidatura — um bar por eleição
- * (dado discreto, não uma curva contínua: nada é interpolado entre anos em
- * que a pessoa não foi candidata, então barras representam isso melhor que
- * uma área). Sem legenda (o título já nomeia a série, ver dataviz skill).
- * Valores nominais (aviso já dado na seção que envolve este gráfico). */
 export function AssetsCurveChart({ data }: { data: Point[] }) {
   const sorted = [...data].sort((a, b) => a.year - b.year);
   if (sorted.length < 2) return null;

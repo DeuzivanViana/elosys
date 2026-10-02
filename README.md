@@ -9,7 +9,7 @@ enriquecimento incompatível).
 > **Indício não é prova.** Nada aqui é acusação. O sistema gera *sinais de alerta*
 > para serem checados por quem tem competência para isso (Ministério Público, TCU,
 > Receita, COAF). Todo dado exibido aponta para o arquivo público de onde saiu, e
-> qualquer pessoa pode re-baixar esse arquivo e conferir (`elosys verify`).
+> qualquer pessoa pode re-baixar esse arquivo e conferir o hash.
 
 Backend: pipeline de coleta em Python + banco SQLite (`elosys.db`). Frontend:
 app Next.js só-leitura em [`/web`](web/README.md) — busca candidato e mostra a
@@ -23,7 +23,166 @@ quando o dinheiro de fato saiu), **841 mil redes sociais declaradas** por
 candidatura (Facebook/Instagram/X/site, obrigatório desde 2018), **25,5 mil
 sanções federais** CEIS/CNEP (474 empresas sancionadas já cruzam com doador/
 fornecedor de campanha) e **3,25 M bens declarados** (R$ 445,5 bilhões,
-patrimônio no registro de candidatura). Banco ~11,7 GB.
+patrimônio no registro de candidatura). Banco ~11,4 GB.
+
+---
+
+## Rodar com banco de dados
+
+O jeito mais rápido: baixar o banco já pronto (~11,4 GB) e abrir o app web, sem
+rodar nenhum crawler.
+
+### 1. Baixar o banco
+
+Arquivo `elosys.zip` (2,84 GB; descompactado, `elosys.db` tem ~11,4 GB). Os dois
+links trazem o mesmo arquivo:
+
+| Link | Origem |
+|---|---|
+| [archive.org/details/elosys](https://archive.org/details/elosys) | Internet Archive |
+| [huggingface.co/datasets/YuriRDev/elosys](https://huggingface.co/datasets/YuriRDev/elosys/tree/main) | Hugging Face |
+
+SHA-256 do `elosys.zip`:
+
+```
+96fb819b681752250db0c6cdc62566d1773338547daf6ea524edcd4024b16693
+```
+
+Confira o download antes de descompactar:
+
+```sh
+sha256sum elosys.zip                    # Linux/macOS/Git Bash
+Get-FileHash elosys.zip -Algorithm SHA256   # PowerShell
+```
+
+Descompacte e deixe o `elosys.db` na **raiz do repositório** (ao lado deste README).
+O banco já vem com todas as tabelas e com o índice de busca por nome de doador/fornecedor.
+
+### 2. Executar localmente
+
+Requisitos: [Node.js](https://nodejs.org/) 20.9+ e git.
+
+```sh
+git clone https://github.com/YuriRDev/elosys.git
+cd elosys
+# coloque o elosys.db baixado aqui, na raiz
+
+cd web
+npm install
+npm run dev        # http://localhost:3000
+```
+
+O app é **só leitura**: abre o `.db` em modo readonly e nunca escreve nele. Para
+apontar outro caminho:
+
+```sh
+ELOSYS_DB_PATH=/caminho/para/elosys.db npm run dev
+```
+
+Build de produção: `npm run build && npm run start`.
+
+---
+
+## Criar o banco do zero e popular
+
+Reconstrói tudo a partir das fontes oficiais. **Demora**: os arquivos do TSE são
+grandes (a prestação de contas passa de 1 GB por ano), o download vai para
+`dados_tmp/` e é apagado depois de processado, e algumas etapas levam de minutos a
+horas. Tenha ~15 GB livres em disco.
+
+Requisitos: [uv](https://docs.astral.sh/uv/) (instala Python 3.12 e as dependências).
+
+```sh
+uv sync
+uv run elosys init-db --db elosys.db
+```
+
+### Etapa 1 — coletar as fontes
+
+Cada crawler é independente e **rewrite-only**: apaga as tabelas que possui e as
+reconstrói. Sem `--years`, processa todos os anos suportados.
+
+```sh
+uv run elosys tse-candidates --db elosys.db      # candidaturas 2014–2026 (TSE consulta_cand)
+uv run elosys tse-accounts   --db elosys.db      # CNPJ de campanha, doações e despesas (a etapa mais longa)
+uv run elosys tse-social     --db elosys.db      # redes sociais declaradas
+uv run elosys tse-assets     --db elosys.db      # bens declarados
+uv run elosys transparencia-sanctions --db elosys.db   # CEIS/CNEP
+uv run elosys transparencia-earmarks  --db elosys.db   # emendas parlamentares
+```
+
+Se um download der HTTP 403 (filtro anti-bot da fonte), baixe o `.zip` no
+navegador, coloque em `dados_tmp/` com o nome que o log mostrou e rode o crawler
+de novo: ele usa o arquivo local.
+
+### Etapa 2 — enriquecer (incremental, opcional)
+
+```sh
+uv run elosys receita-cnpj --db elosys.db --limit 500     # cadastro e sócios de CNPJ (BrasilAPI, 1 request por CNPJ)
+uv run elosys tse-photo-urls --db elosys.db --limit 500   # foto oficial dos candidatos
+```
+
+Os dois são incrementais (não apagam o que já existe): rode várias vezes para
+cobrir mais CNPJs/candidatos.
+
+### Etapa 3 — índice de busca por nome
+
+A busca por doadores/fornecedores que nunca foram candidatos usa uma tabela FTS5
+que não é preenchida por nenhum crawler. Rode depois de cada `tse-accounts`:
+
+```sh
+uv run python - <<'PY'
+import sqlite3
+con = sqlite3.connect("elosys.db")
+con.executescript("""
+DELETE FROM pessoa_fisica_search;
+INSERT INTO pessoa_fisica_search (cpf, name)
+SELECT cpf, max(name) FROM (
+  SELECT donor_cpf_cnpj AS cpf, donor_name AS name FROM campaign_donation
+    WHERE donor_company_id IS NULL AND donor_cpf_cnpj IS NOT NULL
+      AND length(donor_cpf_cnpj) = 11 AND donor_name IS NOT NULL
+  UNION ALL
+  SELECT supplier_cpf_cnpj AS cpf, supplier_name AS name FROM campaign_expense
+    WHERE supplier_company_id IS NULL AND supplier_cpf_cnpj IS NOT NULL
+      AND length(supplier_cpf_cnpj) = 11 AND supplier_name IS NOT NULL
+) GROUP BY cpf;
+""")
+con.commit()
+PY
+```
+
+### Etapa 4 — regras de detecção
+
+Rodam sobre o que já foi coletado e geram os sinais de alerta.
+
+```sh
+uv run elosys rule-disproportionate-expense --db elosys.db
+uv run elosys rule-circular-donations       --db elosys.db   # ~25 min na base real
+uv run elosys candidate-supplier-partner    --db elosys.db   # precisa do receita-cnpj (quadro societário)
+```
+
+### Etapa 5 — camadas opcionais com LLM / X
+
+Precisam de chave em variável de ambiente (nunca commite chaves):
+
+```sh
+export DEEPSEEK_API_KEY=...                                  # segunda opinião sobre os sinais
+uv run elosys ai-review --db elosys.db --limit 100 --order tight
+
+export APIFY_TOKEN=...                                       # posts do X de contas declaradas ao TSE
+uv run elosys social-x      --db elosys.db --scope federal
+uv run elosys social-review --db elosys.db --limit 5000
+```
+
+### Etapa 6 — manifesto e testes
+
+```sh
+uv run elosys manifest --db elosys.db     # grava manifest.json com URL + SHA-256 de cada fonte
+uv run pytest                             # testes (fixtures, sem rede)
+```
+
+Cada crawler é rewrite-only: a tabela passa a conter **exatamente os anos que você
+passou** em `--years`. Para um estado 100% limpo, apague `elosys.db` e recomece.
 
 ---
 
@@ -33,54 +192,6 @@ Cada fonte de dados tem um **crawler independente** (`elosys/tse/*.py`). Rodar u
 crawler apaga as tabelas dele e reconstrói tudo do zero a partir dos arquivos do
 governo. O banco é um artefato descartável; a prova de integridade fica no
 `manifest.json`, versionado no git.
-
-## Rodando
-
-Requer [uv](https://docs.astral.sh/uv/) (gerencia Python e dependências).
-
-```sh
-uv sync                                   # instala tudo
-
-# cada crawler é independente — rode na ordem que quiser
-uv run elosys tse-candidates --db elosys.db     # cadastro de candidaturas (TSE consulta_cand)
-uv run elosys tse-accounts   --db elosys.db     # CNPJ de campanha (TSE prestação de contas)
-uv run elosys tse-social     --db elosys.db     # redes sociais declaradas (TSE rede_social_candidato)
-uv run elosys tse-assets     --db elosys.db     # bens declarados (TSE bem_candidato)
-uv run elosys transparencia-sanctions --db elosys.db  # CEIS/CNEP (Portal da Transparência, sem --years)
-uv run elosys receita-cnpj --db elosys.db --limit 500  # cadastro de CNPJ (BrasilAPI; incremental, prioriza fornecedor/doador por $ recebido)
-
-uv run elosys verify   --db elosys.db     # re-baixa as fontes e confere os hashes
-uv run pytest                             # testes (usam fixtures, sem rede)
-
-# regras de detecção rodam depois, sobre o que já foi coletado
-uv run elosys rule-disproportionate-expense --db elosys.db
-uv run elosys rule-circular-donations --db elosys.db          # demora (~15 min na base real, ver ADs/dados_derivados.md)
-
-# cruzamento: candidato sócio de empresa que recebeu pagamento de campanha
-uv run elosys candidate-supplier-partner --db elosys.db       # precisa de quadro societário (receita-cnpj)
-
-# opcional: segunda opinião de LLM sobre os sinais (rotineiro vs. bizarro)
-export DEEPSEEK_API_KEY=sk-...                                 # NUNCA commitar a chave
-uv run elosys ai-review --db elosys.db --limit 100 --order tight
-
-# opcional: discurso público no X de contas declaradas ao TSE (ver ADs/dados_derivados.md §1.4)
-export APIFY_TOKEN=apify_api_...                               # NUNCA commitar
-uv run elosys social-x     --db elosys.db --scope federal      # coleta (léxico como filtro)
-uv run elosys social-review --db elosys.db --limit 5000        # triagem por LLM (rotineiro vs. pejorativo)
-```
-
-Sem `--years`, cada crawler processa todos os anos suportados (2018, 2020, 2022,
-2024, 2026). Os arquivos do TSE são grandes (a prestação de contas passa de 1 GB por
-ano); o download vai para `dados_tmp/` e é apagado depois de processado.
-
-**Cada crawler é rewrite-only:** ao rodar, ele apaga as tabelas que possui e as
-reconstrói. A tabela passa a conter **exatamente os anos que você passou** em
-`--years` — então para ter todos os anos, rode sem `--years` (ou liste todos).
-Para um estado 100% limpo: `rm elosys.db` e rode os crawlers de novo.
-
-> Se um download der HTTP 403: o filtro anti-bot da fonte (Akamai) barrou. Baixe o
-> `.zip` no navegador, jogue em `dados_tmp/` com o nome que o log mostrou, e rode o
-> crawler de novo — ele usa o arquivo local.
 
 ## O que fica no banco
 
@@ -116,21 +227,27 @@ aponta pra uma linha real (que por sua vez tem seu próprio `provenance_id`), e
 "fraude". Ver [`ADs/dados_derivados.md`](ADs/dados_derivados.md).
 
 **Primeira regra: `disproportionate_expense`** ("despesa desproporcional") —
-item tipicamente barato (caneta, adesivo, crachá...) contratado por valor alto
-em `campaign_expense.description`. Rodada contra a base real: **22.269
-sinais** (1.232 `high` ≥ R$ 50 mil, 21.037 `medium` ≥ R$ 5 mil). Maior caso:
-**R$ 2.504.200,00** em "PRAGÕES, BIG HAND, PERFURADO, PRAGUINHA, ADESIVO". O
-TSE não publica quantidade nesse arquivo, só o valor total — a regra não
-calcula preço unitário, só sinaliza "valor alto pra uma categoria
-tipicamente barata". Pode ser lote grande, item não detalhado na descrição,
-ou erro de digitação — por isso é indício, não prova.
+item tipicamente barato (18 categorias: caneta, adesivo, crachá...) identificado
+em `campaign_expense.description` com valor muito acima do normal **para aquela
+categoria**: `medium` a partir de 15x a mediana histórica da categoria, `high`
+a partir de 30x (piso de R$ 1.000; categorias com menos de 20 despesas usam o
+piso fixo de R$ 5 mil / R$ 50 mil). Rodada contra a base real: **28.743
+sinais** (13.856 `high`, 14.887 `medium`). Maior caso: **R$ 2.504.200,00** em
+"PRAGÕES, BIG HAND, PERFURADO, PRAGUINHA, ADESIVO" (9.879x a mediana de R$ 253,50).
+O TSE não publica quantidade nesse arquivo, só o valor total — a regra não
+calcula preço unitário. Pode ser lote grande, item não detalhado na descrição,
+ou erro de digitação — por isso é indício, não prova. A página
+[`/sinais/despesa-desproporcional`](web/src/app/sinais/despesa-desproporcional/page.tsx)
+lista quem mais gastou por categoria, como % da receita da campanha e contra a
+média de candidatos do mesmo cargo e estado.
 
 **Segunda regra: `circular_donations`** ("doação circular") — constrói um
 grafo dirigido (doador → candidato, candidato → fornecedor) sobre a base
 inteira e usa Tarjan (SCC) + DFS limitado em profundidade (padrão: 5 nós)
 pra achar ciclos: dinheiro que sai de uma campanha e volta pra mesma cadeia.
 Rodada contra a base real: grafo de **5,35M nós / 7,66M arestas**, **108.400
-ciclos encontrados** (63.556 `high` ≤ 3 nós, 44.844 `medium`). Interface em
+ciclos encontrados**; só viram sinal os que movimentaram mais de R$ 10.000 no
+total: **38.267 sinais** (10.705 `high` ≤ 3 nós, 27.562 `medium`). Interface em
 [`/sinais/doacao-circular`](web/src/app/sinais/doacao-circular/page.tsx) —
 filtro por severidade, **ordenável por valor movimentado ou tamanho do
 caminho** — com link direto pro grafo interativo. Mesma disciplina: indício,
@@ -169,8 +286,7 @@ Cada execução de crawler escreve/atualiza, ao lado do `.db`:
 - **`manifest.json`** — a lista de *todos* os arquivos baixados, com `url`,
   `accessed_at`, `sha256` do `.zip` e `sha256` de cada CSV dentro dele. **É a âncora
   de não repúdio**: você commita esse arquivo no git, e aí o histórico público do
-  repositório prova o que foi coletado e quando. `elosys verify` re-baixa cada URL
-  e compara os hashes com esse manifesto.
+  repositório prova o que foi coletado e quando.
 - **`tse_candidates_report.json`, `tse_accounts_report.json`, `tse_social_report.json`**
   — o relatório daquela execução: linhas lidas por ano, CNPJs/candidaturas/URLs
   gerados, CPFs derrubados por ambiguidade (com o motivo), quantas linhas ficaram
@@ -240,34 +356,3 @@ incerto, não uma tarde de crawler.
   A base de 2024 é reconciliada por título eleitoral — ver [`ADs/identidade.md`](ADs/identidade.md).
 - O resultado é **indício, não prova**. O sistema gera sinais de alerta, não
   conclusões. Nada aqui deve virar acusação pública sem apuração formal.
-
-## Próximos passos
-
-1. Continuar rodando `receita-cnpj` em lotes (atualizado em 2026-09-23 — os
-   números abaixo mudam a cada rodada, conferir com as queries em
-   `elosys.db` antes de citar de novo). A fila prioriza por dinheiro
-   recebido/doado (`--order money`, padrão), então a cobertura em **R$ já
-   está bem mais alta que em CNPJs**: **18.628** CNPJs enriquecidos
-   (`company_registry`) de **382.595** fornecedores distintos (~4,9% em
-   contagem) cobrem **70,8% do valor total pago a fornecedores CNPJ** (R$
-   7,15 bi de R$ 10,10 bi). Sobra uma cauda longa de ~366 mil CNPJs de baixo
-   valor individual — é rate-limited (1 request por CNPJ), então cada lote
-   fecha a lacuna que resta em R$ mais devagar que em contagem. A fonte
-   definitiva seria o dump de dados abertos de CNPJ da Receita (todas as
-   empresas de uma vez, sem rate limit).
-2. Guardar os `.zip` do TSE num store por hash (mitiga perda de valor se a fonte
-   republicar um arquivo alterado).
-3. `disproportionate_expense` v2: outlier estatístico por categoria de despesa
-   (mediana), além do léxico fixo de palavras-chave.
-4. **Teto de gastos de campanha (limite legal) por candidatura.** Hoje a ficha
-   do candidato já compara **recebido em doações × despesas contratadas ×
-   pago** (`getPersonProfile().finance`, ver `web/src/lib/queries.ts` e os
-   KPIs em `/politico/[id]`) — isso já está pronto. O que falta é o **teto
-   oficial do TSE** (valor máximo que a lei permite gastar naquela
-   candidatura/cargo/UF) pra comparar "quanto gastou" contra "quanto podia
-   gastar", não só contra "quanto arrecadou". O TSE publica esse limite
-   separadamente (fora do `consulta_cand` e da prestação de contas já
-   coletados) — precisa de um crawler novo (`elosys/tse/*.py`) pra achar e
-   parsear esse arquivo antes de dar pra prometer o dado.
-5. Regra "fornecedor/doador sancionado" — cruzar `sanction` × `campaign_donation`/
-   `campaign_expense` (já sabemos que bate: 474 empresas sancionadas em comum).

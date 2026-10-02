@@ -11,12 +11,6 @@ function resolve(): ColorMode {
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
-/** The app's own light/dark state, for the handful of things CSS custom
- * properties can't reach — React Flow's `colorMode` prop and canvas
- * `Background` dot color both need a literal "light"/"dark"/color string at
- * render time, not a CSS var. Watches both an explicit `data-theme`
- * override (a MutationObserver on <html>) and the device's own preference,
- * same source of truth <ThemeToggle> writes to. */
 export function useColorMode(): ColorMode {
   const [mode, setMode] = useState<ColorMode>("dark");
 

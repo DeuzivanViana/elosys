@@ -29,8 +29,7 @@ export default async function EmendasPage({ searchParams }: PageProps<"/emendas"
       <PageHeader group="EloSys" current="Emendas Parlamentares" />
 
       <section>
-        <div className="mono-label">Portal da Transparência (CGU) · elosys/transparencia/earmarks.py</div>
-        <h1 className="mt-3 text-[26px] leading-tight font-medium tracking-tight">
+        <h1 className="text-[26px] leading-tight font-medium tracking-tight">
           Emendas parlamentares — quem fez, quanto, pra qual empresa
         </h1>
         <p className="mt-4 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>

@@ -9,7 +9,6 @@ SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 
 
 def connect(path: str | Path, *, write: bool = False) -> sqlite3.Connection:
-    """Open the database. Read-only by default (query_only); write is for ETL only."""
     con = sqlite3.connect(str(path))
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
@@ -21,7 +20,6 @@ def connect(path: str | Path, *, write: bool = False) -> sqlite3.Connection:
 
 
 def create_schema(path: str | Path) -> None:
-    """Create the database and apply schema.sql (idempotent: everything is IF NOT EXISTS)."""
     con = sqlite3.connect(str(path))
     try:
         con.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
@@ -31,11 +29,6 @@ def create_schema(path: str | Path) -> None:
         con.close()
 
 
-# Columns added to a table that already existed before this column was
-# introduced -- `CREATE TABLE IF NOT EXISTS` in schema.sql only shapes a
-# BRAND NEW table, so an existing rewrite-only .db needs these applied by
-# hand once. Safe to call every time: each ALTER only runs if the column is
-# still missing.
 _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     "signal": [("amount_cents", "INTEGER"), ("path_length", "INTEGER")],
 }

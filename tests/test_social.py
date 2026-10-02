@@ -1,5 +1,4 @@
-"""social/x_posts + lexicon: handle normalization, query building, the local
-lexicon match and the row that _store_post writes. No network."""
+"""social/x_posts + lexicon: handle normalization, query building, the local"""
 
 from __future__ import annotations
 
@@ -26,7 +25,6 @@ def test_lexicon_is_big_and_weighted():
     assert len(terms) > 300
     weights = {w for _c, _t, w, _n in terms}
     assert weights == {"baixa", "media", "alta"}
-    # a filtro mais estrito devolve menos termos
     assert len(lexicon.search_terms("alta")) < len(lexicon.search_terms("baixa"))
 
 
@@ -35,7 +33,7 @@ def test_build_queries_shape():
     assert len(qs) > 1
     assert all(q.startswith("from:fulano (") for q in qs)
     assert all(len(q) <= 512 for q in qs)
-    assert any('"ideologia de gênero"' in q for q in qs)  # frase entre aspas
+    assert any('"ideologia de gênero"' in q for q in qs)
 
 
 def test_compile_lexicon_word_boundary():
@@ -43,7 +41,7 @@ def test_compile_lexicon_word_boundary():
     pats = dict(lex)
     assert "foca" in pats
     assert pats["foca"].search("aquele deputado é uma foca")
-    assert not pats["foca"].search("o processo foi para foragido")  # 'foca' não é substring solta
+    assert not pats["foca"].search("o processo foi para foragido")
 
 
 def _seed_account(con):
@@ -79,5 +77,4 @@ def test_store_post_writes_hash_and_matches(tmp_path):
     assert "viado" in json.loads(row["matched_terms"])
     assert len(row["raw_sha256"]) == 64
     assert row["apify_run_id"] == "run1"
-    # idempotent: same (account, external_id) not inserted twice
     assert not x_posts._store_post(con, acc, "run2", "fulano", item, lex, None)

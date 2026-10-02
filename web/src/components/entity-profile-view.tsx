@@ -12,9 +12,7 @@ export function EntityProfileView({
   profile, years, year,
 }: {
   profile: EntityProfile;
-  /** Election years that have any campaign finance data (see getExpenseYears). */
   years: number[];
-  /** The year currently selected via `?ano=`, if any. */
   year?: number;
 }) {
   const {

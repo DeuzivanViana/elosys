@@ -1,5 +1,4 @@
-"""ai_review: the LLM call is mocked; we check signal selection, prompt
-building, the row that gets written, and incremental / --refresh behaviour."""
+"""ai_review: the LLM call is mocked; we check signal selection, prompt"""
 
 from __future__ import annotations
 
@@ -37,7 +36,7 @@ def _seed_two_node_cycle(con):
 def _fake_chat(verdict="bizarro"):
     def _inner(system_prompt, user_prompt, *, model="deepseek-chat", temperature=0.2, timeout=120):
         assert "DOAÇÃO CIRCULAR" in user_prompt
-        assert "CANDIDATA B" in user_prompt  # facts made it into the prompt
+        assert "CANDIDATA B" in user_prompt
         return {
             "data": {
                 "verdict": verdict,
@@ -84,12 +83,10 @@ def test_incremental_and_refresh(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ai_review, "chat_json", _fake_chat("bizarro"))
     ai_review.run(con, limit=10, rules=("circular_donations",))
-    # second run without --refresh: nothing new to do
     rep2 = ai_review.run(con, limit=10, rules=("circular_donations",))
     assert rep2["reviewed"] == 0
     assert con.execute("SELECT count(*) FROM signal_ai_review").fetchone()[0] == 1
 
-    # --refresh with a different verdict overwrites in place
     monkeypatch.setattr(ai_review, "chat_json", _fake_chat("plausivel"))
     rep3 = ai_review.run(con, limit=10, rules=("circular_donations",), refresh=True)
     assert rep3["reviewed"] == 1

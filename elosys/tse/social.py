@@ -1,20 +1,4 @@
-"""Crawler: TSE declared social media (rede_social_candidato) -> social_media.
-
-Source zip (one per election year):
-  https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/
-      rede_social_candidato_{year}.zip
-
-Since Res. TSE 23.610/2019, declaring social media / website URLs is part of
-the RRC (Requerimento de Registro de Candidatura) — it is not a field in
-`consulta_cand`, it is this separate file. Every row already carries the
-candidacy's `SQ_CANDIDATO` (= `politician_history.tse_candidacy_id`), so
-identity here is a plain lookup — no CPF fallback, no `resolve_person` needed.
-
-This crawler is independent: `run()` wipes only what it owns (`social_media`)
-and rebuilds. It reads `politician_history` to resolve `person_id`, but does
-not require it to run first — a candidacy not seen there yet just gets
-`person_id = NULL` and a warning.
-"""
+"""Crawler: TSE declared social media (rede_social_candidato) -> social_media."""
 
 from __future__ import annotations
 
@@ -40,7 +24,7 @@ from ..util import clean_tse, now_utc
 log = get_logger("elosys.tse.social")
 
 PARSER_NAME = "tse.social"
-PARSER_VERSION = "1.0"  # 1.0: social_media from rede_social_candidato
+PARSER_VERSION = "1.0"
 
 URL_TEMPLATE = (
     "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/"

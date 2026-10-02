@@ -1,40 +1,10 @@
-"""Detection rule: despesa desproporcional — a normally-cheap item billed at
-a disproportionately high value in campaign_expense.
-
-Textbook example that triggered this rule: a candidate's real data already
-had a "PAPEL, CANETA, ETIQUETA" line item and, separately, over R$ 1.5M
-billed for "ADESIVOS, PRAGUINHA, PRAGAO, PERFURADOS" in a single expense.
-Whether that is a legitimate bulk purchase or something worth a closer look
-is exactly what this rule can't tell — it only points at the row.
-
-Method (v1.0, keyword-based — deliberately simple and auditable):
-  Flag a campaign_expense row when its free-text description (DS_DESPESA)
-  mentions a normally-cheap item (caneta, adesivo, crachá, papel...) AND the
-  amount contracted is above a fixed floor (see MEDIUM_FLOOR_CENTS /
-  HIGH_FLOOR_CENTS below). No statistics, no learned parameters — just a
-  keyword list and two thresholds, both versioned in PARAMS and stamped onto
-  every rule_run row, so a signal is reproducible: same code + same data =
-  same signals.
-
-  TSE does not publish a quantity for these line items, only the total
-  contracted value — so this can flag "expensive for a cheap-sounding
-  category," never compute a real unit price. A future version could add a
-  statistical outlier detector (compare against the median for the same
-  DS_ORIGEM_DESPESA category) — not implemented here; flagged as an open
-  point in ADs/dados_derivados.md.
-
-Rewrite-only: run() deletes only the signals THIS rule produced
-(rule_run.rule = 'disproportionate_expense') and regenerates them from the
-current campaign_expense table. Every signal traces to its source row via
-signal_evidence -> campaign_expense.provenance_id -> parse -> collection ->
-source, and every one is capped at severity medium/high (see
-ADs/dados_derivados.md §4) — this is a sinal de alerta, not an accusation.
-"""
+"""Detection rule: despesa desproporcional — a normally-cheap item billed at"""
 
 from __future__ import annotations
 
 import json
 import sqlite3
+from statistics import median
 
 from ..log import RowCounter, get_logger, step
 from ..util import git_commit, now_utc
@@ -42,32 +12,54 @@ from ..util import git_commit, now_utc
 log = get_logger("elosys.rules.disproportionate_expense")
 
 RULE_NAME = "disproportionate_expense"
-RULE_VERSION = "1.0"
+RULE_VERSION = "2.0"
 
-# Cheap, everyday campaign/office-material items. Uppercase; campaign_expense
-# .description is raw TSE text (not accent-stripped), so common accented
-# spellings are listed alongside the bare ones.
-KEYWORDS = (
-    "CANETA", "LAPIS", "LÁPIS", "LAPISEIRA", "BORRACHA", "APONTADOR",
-    "ADESIVO", "CRACHA", "CRACHÁ", "ETIQUETA", "CLIPS", "GRAMPO",
-    "GRAMPEADOR", "REGUA", "RÉGUA", "BLOCO DE ANOTA", "ENVELOPE",
-    "MARCADOR DE TEXTO", "PRANCHETA", "PERFURADOR", "ELASTICO", "ELÁSTICO",
+CATEGORIES: tuple[tuple[str, ...], ...] = (
+    ("CANETA",),
+    ("LAPIS", "LÁPIS"),
+    ("LAPISEIRA",),
+    ("BORRACHA",),
+    ("APONTADOR",),
+    ("ADESIVO",),
+    ("CRACHA", "CRACHÁ"),
+    ("ETIQUETA",),
+    ("CLIPS",),
+    ("GRAMPO",),
+    ("GRAMPEADOR",),
+    ("REGUA", "RÉGUA"),
+    ("BLOCO DE ANOTA",),
+    ("ENVELOPE",),
+    ("MARCADOR DE TEXTO",),
+    ("PRANCHETA",),
+    ("PERFURADOR",),
+    ("ELASTICO", "ELÁSTICO"),
 )
+KEYWORDS = tuple(spelling for cat in CATEGORIES for spelling in cat)
+CANONICAL_OF = {spelling: cat[0] for cat in CATEGORIES for spelling in cat}
 
-# amount_cents floors -> severity. Framed as "worth checking," not a verdict:
-# could be a bulk order, a bundle with unlisted items, a typo in the value.
-MEDIUM_FLOOR_CENTS = 500_000     # R$ 5.000 — the row must clear this to signal at all
-HIGH_FLOOR_CENTS = 5_000_000     # R$ 50.000
+MIN_SAMPLE_FOR_STATS = 20
+MEDIAN_MULTIPLIER_MEDIUM = 15
+MEDIAN_MULTIPLIER_HIGH = 30
+MIN_FLOOR_CENTS = 100_000
+FALLBACK_MEDIUM_FLOOR_CENTS = 500_000
+FALLBACK_HIGH_FLOOR_CENTS = 5_000_000
 
 PARAMS = {
-    "keywords": list(KEYWORDS),
-    "medium_floor_cents": MEDIUM_FLOOR_CENTS,
-    "high_floor_cents": HIGH_FLOOR_CENTS,
+    "categories": [list(cat) for cat in CATEGORIES],
+    "min_sample_for_stats": MIN_SAMPLE_FOR_STATS,
+    "median_multiplier_medium": MEDIAN_MULTIPLIER_MEDIUM,
+    "median_multiplier_high": MEDIAN_MULTIPLIER_HIGH,
+    "min_floor_cents": MIN_FLOOR_CENTS,
+    "fallback_medium_floor_cents": FALLBACK_MEDIUM_FLOOR_CENTS,
+    "fallback_high_floor_cents": FALLBACK_HIGH_FLOOR_CENTS,
 }
 
 
-def _severity(amount_cents: int) -> str:
-    return "high" if amount_cents >= HIGH_FLOOR_CENTS else "medium"
+def _category_for(description: str) -> str | None:
+    for spelling, canonical in CANONICAL_OF.items():
+        if spelling in description:
+            return canonical
+    return None
 
 
 def run(con: sqlite3.Connection) -> dict:
@@ -76,15 +68,45 @@ def run(con: sqlite3.Connection) -> dict:
 
     where_keywords = " OR ".join("ce.description LIKE ?" for _ in KEYWORDS)
     like_params = [f"%{k}%" for k in KEYWORDS]
-    rows = con.execute(
-        "SELECT ce.id, ce.amount_cents, ce.description, ce.year, ce.cnpj, "
-        "       ce.supplier_name, ce.supplier_company_id, ce.supplier_person_id, "
-        "       co.person_id AS candidate_person_id "
-        "FROM campaign_expense ce "
-        "LEFT JOIN campaign_org co ON co.id = ce.campaign_org_id "
-        f"WHERE ce.amount_cents >= ? AND ({where_keywords})",  # noqa: S608 (keywords are a fixed constant tuple)
-        [MEDIUM_FLOOR_CENTS, *like_params],
-    ).fetchall()
+    with step(log, "scan campaign_expense for cheap-item categories"):
+        rows = con.execute(
+            "SELECT ce.id, ce.amount_cents, ce.description, ce.year, ce.cnpj, "
+            "       ce.supplier_name, ce.supplier_company_id, ce.supplier_person_id, "
+            "       co.person_id AS candidate_person_id "
+            "FROM campaign_expense ce "
+            "LEFT JOIN campaign_org co ON co.id = ce.campaign_org_id "
+            f"WHERE ({where_keywords})",  # noqa: S608
+            like_params,
+        ).fetchall()
+
+    by_category: dict[str, list[sqlite3.Row]] = {}
+    for r in rows:
+        cat = _category_for(r["description"])
+        if cat is None:
+            continue
+        by_category.setdefault(cat, []).append(r)
+
+    category_stats: dict[str, dict] = {}
+    for cat, cat_rows in by_category.items():
+        amounts = sorted(r["amount_cents"] or 0 for r in cat_rows)
+        n = len(amounts)
+        if n >= MIN_SAMPLE_FOR_STATS:
+            med = median(amounts)
+            medium_floor = max(MIN_FLOOR_CENTS, round(med * MEDIAN_MULTIPLIER_MEDIUM))
+            high_floor = max(MIN_FLOOR_CENTS, round(med * MEDIAN_MULTIPLIER_HIGH))
+        else:
+            med = None
+            medium_floor = FALLBACK_MEDIUM_FLOOR_CENTS
+            high_floor = FALLBACK_HIGH_FLOOR_CENTS
+        category_stats[cat] = {
+            "n": n, "median_cents": med, "medium_floor": medium_floor, "high_floor": high_floor,
+        }
+        log.info(
+            "  %-20s n=%6s median=%s medium>=R$%.2f high>=R$%.2f",
+            cat, f"{n:,}",
+            f"R${med / 100:,.2f}" if med is not None else "n/d (fallback floors)",
+            medium_floor / 100, high_floor / 100,
+        )
 
     cur = con.execute(
         "INSERT INTO rule_run (rule, rule_version, code_commit, params, run_at, rows_generated) "
@@ -97,18 +119,35 @@ def run(con: sqlite3.Connection) -> dict:
     generated = 0
     for r in rows:
         rc.tick()
+        cat = _category_for(r["description"])
+        if cat is None:
+            continue
+        stats = category_stats[cat]
         amount = r["amount_cents"] or 0
-        severity = _severity(amount)
+        if amount < stats["medium_floor"]:
+            continue
+        severity = "high" if amount >= stats["high_floor"] else "medium"
+
+        if stats["median_cents"] is not None:
+            times_median = amount / stats["median_cents"] if stats["median_cents"] else None
+            basis = (
+                f"{times_median:.0f}x a mediana de R$ {stats['median_cents'] / 100:,.2f} "
+                f"pra \"{cat.lower()}\" ({stats['n']:,} despesas nessa categoria no histórico)"
+                if times_median is not None else "categoria sem mediana estável"
+            )
+        else:
+            basis = f"categoria \"{cat.lower()}\" com poucas despesas no histórico ({stats['n']}) — piso fixo aplicado"
+
         explanation = (
             f"Despesa de campanha de R$ {amount / 100:,.2f} descrita como "
-            f'"{r["description"]}" — valor alto para um item normalmente barato. '
+            f'"{r["description"]}" — {basis}. '
             "Pode ser lote com itens não detalhados na descrição, compra em grande "
             "volume, ou erro de digitação no valor; não é, por si só, indício de "
             "irregularidade."
         )
         sig_cur = con.execute(
-            "INSERT INTO signal (rule_run_id, type, severity, explanation) VALUES (?, ?, ?, ?)",
-            (rule_run_id, "cheap_item_high_value", severity, explanation),
+            "INSERT INTO signal (rule_run_id, type, severity, explanation, amount_cents) VALUES (?, ?, ?, ?, ?)",
+            (rule_run_id, "cheap_item_high_value", severity, explanation, amount),
         )
         signal_id = int(sig_cur.lastrowid)
 
@@ -150,6 +189,11 @@ def _reset(con: sqlite3.Connection) -> None:
     )
     con.execute(
         "DELETE FROM signal_actor WHERE signal_id IN "
+        "(SELECT s.id FROM signal s JOIN rule_run r ON r.id = s.rule_run_id WHERE r.rule = ?)",
+        (RULE_NAME,),
+    )
+    con.execute(
+        "DELETE FROM signal_ai_review WHERE signal_id IN "
         "(SELECT s.id FROM signal s JOIN rule_run r ON r.id = s.rule_run_id WHERE r.rule = ?)",
         (RULE_NAME,),
     )

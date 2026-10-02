@@ -7,8 +7,7 @@ import { formatBRL, formatCnpj } from "@/lib/format";
 import { Skeleton } from "./skeleton";
 
 export function TopSuppliers({ years, initialYear }: { years: number[]; initialYear?: number }) {
-  // Default to the most recent election, not "todas" — the all-time ranking
-  // aggregates ~9M+ rows and takes several seconds; per-year is near-instant.
+  // Default to the latest year: the all-time ranking takes several seconds.
   const [year, setYear] = useState<string>(
     initialYear ? String(initialYear) : years[0] ? String(years[0]) : "all"
   );

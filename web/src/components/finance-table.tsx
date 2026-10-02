@@ -17,13 +17,8 @@ type Props = {
   scope: "candidate" | "entity";
   id: string;
   dir: "received" | "spent" | "given";
-  /** Text for the "counterparty" column header, e.g. "doador" / "fornecedor". */
   counterpartyLabel: string;
-  /** amber for money out, green for money in — matches the rest of the app. */
   tone: "green" | "amber" | "neutral";
-  /** The year filter, driven by the page's own `?ano=` (the navbar dropdown
-   * on /politico/[id]) — no separate year picker in the table itself, so
-   * there's only one place on the page that controls it. */
   year?: number;
 };
 
@@ -33,7 +28,6 @@ const AMOUNT_TONE: Record<Props["tone"], string> = {
   neutral: "text-[var(--fg-2)]",
 };
 
-// which direction a column sorts "first" when you click it fresh
 const DEFAULT_DIR: Record<FinanceSort, "asc" | "desc"> = {
   name: "asc",
   amount: "desc",
@@ -49,9 +43,6 @@ function hrefFor(r: FinanceRow): string | null {
   return d.length === 14 ? `/cnpj/${d}` : d.length === 11 ? `/cpf/${d}` : null;
 }
 
-// "100" or "100,50" or "100.50" (reais, as the user types) -> integer cents.
-// Not a full BRL parser (no thousands separator) -- a filter input, not a
-// display value.
 function reaisToCents(v: string): number | undefined {
   const trimmed = v.trim().replace(",", ".");
   if (!trimmed) return undefined;
@@ -74,8 +65,6 @@ export function FinanceTable({ title, scope, id, dir, counterpartyLabel, tone, y
   const [loading, setLoading] = useState(true);
   const abort = useRef<AbortController | null>(null);
 
-  // The year filter comes from outside (the navbar dropdown, via ?ano=) —
-  // when it changes, whatever page we were on no longer means anything.
   useEffect(() => setPage(1), [year]);
 
   useEffect(() => {

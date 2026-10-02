@@ -22,14 +22,10 @@ function fmt(d: Date): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-/** A "de/até" date range, picked from a shadcn/react-day-picker calendar in
- * a popover — not two bare <input type=date>, so the two ends of the range
- * are visibly one gesture (drag/click-click) instead of two disconnected
- * fields. */
 export function DateRangePicker({
   from, to, onChange,
 }: {
-  from?: string; // 'YYYY-MM-DD'
+  from?: string;
   to?: string;
   onChange: (range: { from?: string; to?: string }) => void;
 }) {

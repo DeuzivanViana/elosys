@@ -22,11 +22,7 @@ export const metadata: Metadata = {
     "Cruzamento de dados públicos de políticos brasileiros por CPF/CNPJ. Indício, não prova — todo campo aponta para a fonte oficial de onde saiu.",
 };
 
-// Runs before hydration, so an explicit saved choice applies with zero
-// flash. No saved choice = no attribute set = globals.css's own
-// `@media (prefers-color-scheme: light)` renders the right theme on the
-// very first paint, no JS required at all — this script only has anything
-// to do once the user has actually picked a theme via <ThemeToggle>.
+// Runs before hydration so a saved theme applies with no flash.
 const THEME_INIT_SCRIPT = `
 try {
   var t = localStorage.getItem("theme");

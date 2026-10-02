@@ -11,8 +11,8 @@ import pytest
 from elosys.db import connect, create_schema
 from elosys.transparencia import sanctions
 
-_CPF_KNOWN = "11144477735"     # already a politician in `people`
-_CPF_UNKNOWN = "45612378900"   # a sanctioned citizen, not in `people`
+_CPF_KNOWN = "11144477735"
+_CPF_UNKNOWN = "45612378900"
 _CNPJ = "98765432000155"
 
 CEIS_HEADER = (
@@ -54,7 +54,7 @@ def _cnep_row(code, cnpj, nome, valor):
 CEIS_LINES = [
     _ceis_row("1", _CPF_KNOWN, "JOAO DA SILVA"),
     _ceis_row("2", _CPF_UNKNOWN, "FULANO SANCIONADO"),
-    _ceis_row("1", _CPF_KNOWN, "JOAO DA SILVA"),  # exact dup sanction_code -> ignored
+    _ceis_row("1", _CPF_KNOWN, "JOAO DA SILVA"),
 ]
 CNEP_LINES = [
     _cnep_row("100", _CNPJ, "EMPRESA PUNIDA", "2219084,85"),
@@ -99,7 +99,7 @@ def test_ingests_both_registries_and_dedupes(db, tmp_path):
     con = connect(db, write=True)
     rep = sanctions.run(con, tmp_dir=tmp_path)
 
-    assert rep["sanctions"] == 3  # 2 CEIS (1 dup ignored) + 1 CNEP
+    assert rep["sanctions"] == 3
     assert rep["registries"]["ceis"]["new_sanctions"] == 2
     assert rep["registries"]["cnep"]["new_sanctions"] == 1
     con.close()
@@ -126,7 +126,7 @@ def test_never_creates_a_people_row_for_a_sanctioned_citizen(db, tmp_path):
     before = con.execute("SELECT count(*) FROM people").fetchone()[0]
     sanctions.run(con, tmp_dir=tmp_path)
     after = con.execute("SELECT count(*) FROM people").fetchone()[0]
-    assert after == before  # no new people rows at all
+    assert after == before
     con.close()
 
 

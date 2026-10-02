@@ -1,31 +1,4 @@
-"""Crawler: Portal da Transparência CEIS + CNEP -> sanction.
-
-CEIS (Cadastro de Empresas Inidôneas e Suspensas) and CNEP (Cadastro Nacional
-de Empresas Punidas) are the federal registry of people/companies barred from
-contracting with government or fined for corruption (Lei 8.429, Lei 12.846).
-
-Unlike TSE data, this is NOT a per-election historical file: the portal only
-ever serves "today's" full snapshot at
-    https://portaldatransparencia.gov.br/download-de-dados/{ceis|cnep}/{YYYYMMDD}
-(one .zip containing one .csv). There's no `--years` here — every run
-captures the current list as of today. The exact date is discovered by
-reading it off the download page's own script (same value the "Baixar"
-button in a browser would use), not assumed from the local clock, so this
-still works if the portal hasn't refreshed for the current day yet.
-
-CSV layout note: CEIS and CNEP share the same columns except CNEP inserts an
-extra "VALOR DA MULTA" (fine amount) column. The header text round-trips
-latin-1 encoding oddly in some terminals, so columns are read by **position**
-(verified against the real files), not by matching accented column names.
-
-Identity policy (see ADs/politician.md, same as donor/supplier in
-accounts.py): a sanctioned individual NEVER creates a new `people` row —
-`person_id` is set only when the CPF already belongs to someone in `people`
-(i.e., this cross-references an *existing* politician, it doesn't build a
-registry of every sanctioned citizen in Brazil). A sanctioned CNPJ always
-gets a `companies` row (kind='sanctioned', get-or-create) since companies
-are already tracked generically for campaign finance.
-"""
+"""Crawler: Portal da Transparência CEIS + CNEP -> sanction."""
 
 from __future__ import annotations
 
@@ -76,8 +49,6 @@ csv.field_size_limit(1 << 24)
 
 _OWNED_TABLES = ["sanction"]
 
-# Column order verified against the real files (2026-09-04). CNEP inserts
-# "VALOR DA MULTA" right after "CATEGORIA DA SANCAO"; everything else lines up.
 _CEIS_COLUMNS = (
     "registry", "sanction_code", "person_type", "cpf_cnpj", "sanctioned_name",
     "sanctioned_name_reported", "legal_name", "trade_name", "process_number",
@@ -95,6 +66,7 @@ _CNEP_COLUMNS = (
     "source_data_date", "source_origin", "notes",
 )
 
+# CNEP adds VALOR DA MULTA after CATEGORIA DA SANCAO.
 _SANCTION_COLUMNS = (
     "registry", "sanction_code", "person_type", "cpf_cnpj", "sanctioned_name",
     "sanctioned_name_reported", "legal_name", "trade_name", "process_number",
@@ -111,9 +83,6 @@ _DATE_FIELDS = frozenset(
 
 
 def _discover_date(path: str) -> str:
-    """Reads the YYYYMMDD of the file the portal currently serves for `path`
-    (ceis|cnep) off the download page itself — the same value its own
-    "Baixar" button would use."""
     url = PAGE_URL_TEMPLATE.format(path=path)
     r = curl_requests.get(url, impersonate="chrome", timeout=60)
     r.raise_for_status()
@@ -206,12 +175,12 @@ def _scan_csv(data: bytes, columns: tuple[str, ...], rows_batch: list[dict],
               con: sqlite3.Connection, parse_id: int, rc: RowCounter) -> None:
     reader = csv.reader(
         io.TextIOWrapper(io.BytesIO(data), encoding="latin-1", newline=""), delimiter=";")
-    next(reader, None)  # header
+    next(reader, None)
     now = now_utc()
     for raw in reader:
         rc.tick()
         if len(raw) != len(columns):
-            continue  # malformed row (rare trailing blank line etc.)
+            continue
         row = dict(zip(columns, (clean_tse(v) for v in raw), strict=True))
 
         cpf_cnpj = digits_only(row.get("cpf_cnpj"))

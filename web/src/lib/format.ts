@@ -17,7 +17,6 @@ export function formatCnpj(cnpj: string): string {
   return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8, 12)}-${cnpj.slice(12)}`;
 }
 
-/** Link to the /cnpj or /cpf entity page for a raw CPF/CNPJ digit string. */
 export function entityHref(digits: string | null): string | null {
   if (!digits) return null;
   if (digits.length === 14) return `/cnpj/${digits}`;
@@ -54,4 +53,33 @@ const RESULT_TONE: Record<string, "green" | "red" | "neutral"> = {
 export function resultTone(result: string | null): "green" | "red" | "neutral" {
   if (!result) return "neutral";
   return RESULT_TONE[result.toUpperCase()] ?? "neutral";
+}
+
+const EXPENSE_CATEGORY_LABEL: Record<string, string> = {
+  CANETA: "Canetas",
+  LAPIS: "Lápis",
+  LAPISEIRA: "Lapiseiras",
+  BORRACHA: "Borrachas",
+  APONTADOR: "Apontadores",
+  ADESIVO: "Adesivos",
+  CRACHA: "Crachás",
+  ETIQUETA: "Etiquetas",
+  CLIPS: "Clipes",
+  GRAMPO: "Grampos",
+  GRAMPEADOR: "Grampeadores",
+  REGUA: "Réguas",
+  "BLOCO DE ANOTA": "Blocos de anotação",
+  ENVELOPE: "Envelopes",
+  "MARCADOR DE TEXTO": "Marcadores de texto",
+  PRANCHETA: "Pranchetas",
+  PERFURADOR: "Perfuradores",
+  ELASTICO: "Elásticos",
+};
+
+export function expenseCategoryLabel(category: string): string {
+  return EXPENSE_CATEGORY_LABEL[category] ?? category;
+}
+
+export function formatPct(pct: number): string {
+  return `${pct.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }

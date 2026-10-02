@@ -1,7 +1,5 @@
 import { Skeleton } from "@/components/skeleton";
 
-/** Shared shape for the four /sinais/* listing pages' loading.tsx — header
- * + filter row + a stack of signal-card placeholders. */
 export function SinaisLoadingSkeleton({ filterCount = 4 }: { filterCount?: number }) {
   return (
     <div className="flex flex-col gap-8">

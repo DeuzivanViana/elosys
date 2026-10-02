@@ -23,18 +23,11 @@ const nodeTypes = { entity: EntityNode };
 const edgeTypes = { floating: FloatingEdge };
 
 const NODE_R = 22;
-const RING_R = 92; // px from center to each node, grows with node count below
+const RING_R = 92;
 
 type FlowNode = Node<GraphNodeData, "entity">;
 type FlowEdge = Edge<GraphEdgeData, "floating">;
 
-/**
- * A ciclo (A -> B -> C -> A) IS the card, not a graph tucked under a text
- * header — the graph fills the whole thing, and the signal's facts (severity,
- * rule, IA verdict, valor) sit in a gradient scrim pinned over its top edge,
- * "ver grafo completo" pinned to the bottom-right corner. Always visible
- * (no show/hide toggle) — this is the signal, not an optional extra.
- */
 export function CycleGraph({
   nodes: cycleNodes, selfCpfCnpj, edgeAmounts, severity, roleLabel, aiReview, amountCents, pathLength, graphHref,
 }: {
@@ -100,19 +93,12 @@ function Ring({
   const router = useRouter();
   const colorMode = useColorMode();
   const n = cycleNodes.length;
-  // n===2 is the tight, common case (the whole cycle is just "A <-> B") and
-  // needs the most room: each node's own label sits right below its circle,
-  // and with only 2 nodes the curves connecting them pass directly through
-  // that space unless there's enough radius to bow clear of it.
   const radius = n === 2 ? 130 : n <= 3 ? 90 : n <= 5 ? RING_R : 92 + (n - 5) * 14;
   const size = radius * 2 + 120;
 
   const { nodes, edges } = useMemo(() => {
     const flowNodes: FlowNode[] = cycleNodes.map((c, i) => {
-      // Start at the right (not the top): for n===2 this lands the two
-      // nodes side by side instead of stacked vertically, so the curve
-      // between them runs at circle-center height, clear of each node's
-      // own label (which sits BELOW its circle, not beside it).
+      // Start at the right so n===2 puts nodes side by side, clear of the labels below them.
       const angle = (2 * Math.PI * i) / n;
       const isSelf = selfCpfCnpj != null && c.cpfCnpj === selfCpfCnpj;
       return {
@@ -127,9 +113,6 @@ function Ring({
         data: {
           cpfCnpj: c.cpfCnpj,
           type: c.type,
-          // A cycle member with a `people` row really did run for office --
-          // same "político" color/photo treatment as any other candidate
-          // node, not the generic "pessoa física" gray.
           kind: isSelf ? "self" : c.type === "company" ? "company" : c.personId != null ? "politician" : "person",
           label: c.label,
           sanctioned: false,

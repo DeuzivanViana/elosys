@@ -2,10 +2,6 @@
 
 import { useState } from "react";
 
-/** A candidate's official photo for a profile header — a direct TSE CDN
- * link (divulgacandcontas.tse.jus.br, see schema.sql's note on
- * candidate_photo), so it can 404 or break without warning; this just
- * hides itself on error instead of showing a broken-image icon. */
 export function ProfilePhoto({ url, size }: { url: string; size: number }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;

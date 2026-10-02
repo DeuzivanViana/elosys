@@ -14,9 +14,6 @@ function parseCents(v: string | null): number | undefined {
   return Number.isFinite(n) ? Math.round(n) : undefined;
 }
 
-/** Paginated + name-searchable campaign finance for a profile page's
- * <FinanceTable>. `scope=candidate` + `dir=received|spent`, or
- * `scope=entity` + `dir=given|received`. */
 export async function GET(request: Request) {
   const sp = new URL(request.url).searchParams;
   const scope = sp.get("scope");

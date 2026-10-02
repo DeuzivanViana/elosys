@@ -1,5 +1,4 @@
-"""candidate_supplier_partner: the fuzzy name+6-digit match against a
-company that received campaign money."""
+"""candidate_supplier_partner: the fuzzy name+6-digit match against a"""
 
 from __future__ import annotations
 
@@ -7,7 +6,6 @@ from elosys.db import connect, create_schema
 from elosys.rules import candidate_supplier_partner as rule
 
 T = "2026-01-01T00:00:00Z"
-# CPF 12449853800 -> middle 6 digits (cpf[3:9]) = "498538"
 CPF = "12449853800"
 
 
@@ -19,7 +17,6 @@ def _seed(con):
     con.execute("INSERT INTO people (cpf,cpf_trusted,canonical_name,created_at) "
                 "VALUES (?,1,'BRUNA MARQUES FUTURO',?)", (CPF, T))
     pid = con.execute("SELECT id FROM people").fetchone()["id"]
-    # a DIFFERENT candidate whose campaign pays the company
     con.execute("INSERT INTO people (cpf,cpf_trusted,canonical_name,created_at) "
                 "VALUES ('99988877766',1,'OUTRO CANDIDATO',?)", (T,))
     payer = con.execute("SELECT id FROM people WHERE cpf='99988877766'").fetchone()["id"]
@@ -56,7 +53,7 @@ def test_matches_partner_candidate_of_a_paid_company(tmp_path):
     assert row["partner_role"] == "Administrador"
     assert row["payments_total_cents"] == 5000000
     assert row["payments_count"] == 1
-    assert row["paid_by_self"] == 0  # a different candidate's campaign paid it
+    assert row["paid_by_self"] == 0
     con.close()
 
 
@@ -65,7 +62,6 @@ def test_wrong_digits_dont_match(tmp_path):
     create_schema(path)
     con = connect(path, write=True)
     _seed(con)
-    # change the mask so the 6 middle digits no longer line up with the CPF
     con.execute("UPDATE company_partner SET partner_doc_masked = '***000000**'")
     con.commit()
 
@@ -80,7 +76,6 @@ def test_ambiguous_name_and_digits_is_dropped(tmp_path):
     create_schema(path)
     con = connect(path, write=True)
     _seed(con)
-    # a second person, same normalized name, same 6 middle digits, different CPF
     con.execute("INSERT INTO people (cpf,cpf_trusted,canonical_name,created_at) "
                 "VALUES ('77749853811',1,'BRUNA MARQUES FUTURO',?)", (T,))
     con.commit()

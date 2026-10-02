@@ -1,6 +1,3 @@
-/** A styled "nothing here" block — icon + message (+ optional hint, e.g. the
- * CLI command that would populate this list) — instead of one bare line of
- * muted text. Used anywhere a list/table can legitimately be empty. */
 export function EmptyState({
   icon = "◌", title, hint, compact = false,
 }: {

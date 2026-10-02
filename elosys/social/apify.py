@@ -1,18 +1,4 @@
-"""Cliente mínimo da Apify (https://apify.com) para o ator de scraping do X.
-
-O token é lido de APIFY_TOKEN no ambiente APENAS — nunca de arquivo, nunca
-commitado (mesma regra da DEEPSEEK_API_KEY). Pegue um em
-https://console.apify.com/account/integrations e:
-
-    export APIFY_TOKEN=apify_api_...        # bash/zsh
-    $env:APIFY_TOKEN = "apify_api_..."      # PowerShell
-
-Ator (default): kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest
-— ~US$ 0,25 / 1.000 resultados, aceita `searchTerms` com operadores do X
-(`from:`, `since:`, `OR`, `-filter:retweets`) e — ao contrário do
-apidojo/tweet-scraper — funciona via API no plano Free da Apify.
-Trocável por APIFY_ACTOR no ambiente (formato `username~actor-name`).
-"""
+"""Cliente mínimo da Apify (https://apify.com) para o ator de scraping do X."""
 
 from __future__ import annotations
 
@@ -33,8 +19,6 @@ _POLL_TIMEOUT = 60
 _ITEMS_TIMEOUT = 180
 _DONE = {"SUCCEEDED"}
 _FAILED = {"FAILED", "ABORTED", "TIMED-OUT", "TIMED_OUT"}
-# Free plan caps concurrent actor runs (5). Rather than fail the batch, wait for
-# a slot — the ThreadPoolExecutor then self-throttles to whatever the plan allows.
 _CONCURRENCY_RETRY_WAIT = 30
 _CONCURRENCY_RETRIES = 40
 
@@ -61,11 +45,6 @@ def run_actor(
     max_wait_seconds: int = 1800,
     memory_mbytes: int = 512,
 ) -> tuple[str, list[dict]]:
-    """Start the actor, wait for it, return (run_id, dataset_items).
-
-    Raises ApifyError on any HTTP failure or a failed/aborted run. Safe to call
-    from a worker thread (no shared state; each run is independent).
-    """
     token = _token()
     actor = _actor()
 
@@ -103,7 +82,7 @@ def run_actor(
         try:
             s = requests.get(f"{BASE}/actor-runs/{run_id}?token={token}", timeout=_POLL_TIMEOUT)
             status = s.json()["data"]["status"]
-        except Exception as e:  # noqa: BLE001 (transient poll failure — keep waiting)
+        except Exception as e:  # noqa: BLE001
             status = "RUNNING"
             _ = e
 

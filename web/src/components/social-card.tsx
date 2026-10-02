@@ -19,12 +19,7 @@ const PLATFORM_ICON: Record<string, IconType> = {
   other: FaLink,
 };
 
-// Each platform's own brand color (not the app's palette) — the whole point
-// is these read as "the real Facebook/Instagram/X icon", not a themed one.
-// X is the one exception: its actual mark is black-or-white depending on
-// what it sits on (there's no single "X brand color"), so it uses the
-// theme's own foreground instead of a fixed hex — otherwise a hardcoded
-// white icon disappears on a light card in light mode (or vice versa).
+// X uses the theme foreground: a fixed white icon vanishes on light cards.
 const PLATFORM_COLOR: Record<string, string> = {
   facebook: "#1877F2",
   instagram: "#E4405F",
@@ -52,9 +47,6 @@ function labelFor(platform: string, url: string): string {
   }
 }
 
-/** One declared social/site link — platform's own brand-colored icon, the
- * handle/URL, and the year it was declared. A card, not a bare icon: click
- * goes straight to the account. */
 export function SocialCard({ social }: { social: SocialMediaLink }) {
   const Icon = PLATFORM_ICON[social.platform] ?? FaLink;
   const color = PLATFORM_COLOR[social.platform] ?? "var(--muted)";

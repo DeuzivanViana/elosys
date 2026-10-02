@@ -1,21 +1,4 @@
-"""Segunda opinião de LLM (DeepSeek) sobre posts do X coletados em social_post.
-
-O léxico (`elosys/social/lexicon.py`) já é um filtro de recall FROUXO: um
-post em `social_post` só chegou aqui porque casou algum termo que PODE ser
-pejorativo — "macaco", "viado", "nordestino", "puta"... a maioria vai ser
-uso legítimo (o animal, reapropriação, citação, discussão sobre racismo,
-palavrão genérico). Este job manda o texto pro modelo e pede uma
-classificação por contexto: é ataque a um grupo, ou não?
-
-Espelha elosys/rules/ai_review.py: NÃO é rewrite-only, NÃO é uma regra
-(sem rule_run). Cache incremental em `social_post_review`, um por
-(post, modelo). `--refresh` re-revisa.
-
-NADA aqui é conclusão. Um post marcado é "vale ler", nunca "é racista".
-`severity` só low/medium/high. O prompt diz isso ao modelo.
-
-Run: `elosys social-review --db elosys.db --limit 200` (precisa de DEEPSEEK_API_KEY)
-"""
+"""Segunda opinião de LLM (DeepSeek) sobre posts do X coletados em social_post."""
 
 from __future__ import annotations
 
@@ -30,12 +13,8 @@ from ..util import now_utc
 log = get_logger("elosys.rules.social_review")
 
 DEFAULT_LIMIT = 100
-DEFAULT_WORKERS = 8   # DeepSeek aguenta chamadas concorrentes; a escrita no SQLite fica serial
+DEFAULT_WORKERS = 8
 SEVERITIES = {"low", "medium", "high"}
-# Taxonomia de SAÍDA do modelo — igual à lista do SYSTEM_PROMPT. NÃO é a do
-# léxico (lexicon.py subdivide racismo em negros/indígenas/asiáticos p/ montar
-# a busca; aqui o modelo devolve só "racismo"). As duas últimas não são grupo
-# protegido — são xingamento; a UI as separa.
 CATEGORIES = {
     "lgbtfobia", "racismo", "misoginia", "capacitismo", "xenofobia", "regionalismo",
     "aporofobia", "gordofobia", "antissemitismo", "intolerancia_religiosa", "etarismo_saude",
@@ -144,7 +123,6 @@ def run(
 
 
 def _review_one(post_id: int, user_prompt: str, model: str) -> tuple[str, dict]:
-    """Network only — safe in a worker thread. Returns (prompt, chat_json output)."""
     return user_prompt, chat_json(SYSTEM_PROMPT, user_prompt, model=model)
 
 

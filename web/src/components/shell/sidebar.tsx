@@ -7,17 +7,10 @@ import { useShell } from "./shell-context";
 
 type NavLink = { href: string; label: string; count?: number; alert?: boolean };
 
-/** The whole app's persistent left rail: logo, search trigger, and global
- * nav (what used to live behind the navbar's hamburger). One column, no
- * dropdown/toggle to open it: it's always there. */
 export function Sidebar({ counts }: { counts: SidebarCounts }) {
   const pathname = usePathname();
   const { setPaletteOpen } = useShell();
 
-  // Flat top-level links, no group label — a label above "Grafo de
-  // correlações" saying "Grafo" tells you nothing the link text doesn't
-  // already say. "Sinais" is the one real group: 4 siblings that share a
-  // topic worth naming.
   const top: NavLink[] = [
     { href: "/", label: "Início" },
     { href: "/grafo", label: "Grafo de correlações" },
@@ -26,6 +19,7 @@ export function Sidebar({ counts }: { counts: SidebarCounts }) {
   ];
   const sinais: NavLink[] = [
     { href: "/sinais/doacao-circular", label: "Doação circular", count: counts.circularDonations, alert: true },
+    { href: "/sinais/despesa-desproporcional", label: "Despesa desproporcional", count: counts.disproportionateExpense },
     { href: "/sinais/socio-fornecedor", label: "Sócio de fornecedor", count: counts.supplierPartner },
     { href: "/sinais/analise-ia", label: "Análise de IA", count: counts.aiReview },
     { href: "/sinais/discurso", label: "Discurso em rede social", count: counts.discourse, alert: true },

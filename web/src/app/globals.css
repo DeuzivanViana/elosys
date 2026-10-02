@@ -49,36 +49,22 @@
   --radius-xl: var(--r-page);
 }
 
-/* ---------- EloSys design kit — dark by default, follows the device's
-   prefers-color-scheme with a light override, see ../../../new-design.
-   Accent is neutral gray (no hue) everywhere in the app's own UI — the one
-   deliberate exception is brand icons that are already a real brand color
-   (social platform logos in social-card.tsx: Facebook blue, LinkedIn blue,
-   etc.), which stay as-is since they're identity marks, not theme accents. ---------- */
+/* EloSys design kit */
 :root {
-  /* ground */
   --bg: #09090b;
   --surface: #0b0b0e;
   --card-tone: #131317;
   --hover: #18181b;
   --active: #1c1c22;
 
-  /* borders */
   --border-1: #27272a;
   --border-2: #3f3f46;
 
-  /* text */
   --fg-1: #fafafa;
   --fg-2: #d4d4d8;
   --muted: #b0b0ba;
   --muted-2: #8b8b95;
 
-  /* semantic — accent is neutral gray, not a hue: light-on-dark here so it
-     pops against --bg, and --accent-foreground = --bg so text sitting on a
-     solid accent fill (e.g. .btn--primary) always reads clearly in either
-     theme without a separate override. --accent-rgb/--accent-2-rgb are the
-     same colors as bare r,g,b triplets, for spots that need rgba(..., alpha)
-     (CSS can't take a var() as a whole color inside rgba()'s channels). */
   --accent: #d4d4d8;
   --accent-2: #e4e4e7;
   --accent-rgb: 212, 212, 216;
@@ -91,58 +77,29 @@
   --red: #ef4444;
   --red-tint: rgba(239, 68, 68, 0.4);
   --red-row: rgba(239, 68, 68, 0.05);
-  /* the "this is the candidate you're looking at" marker — distinct from
-     every other semantic color (green=in, red=alerta, accent=marca) */
   --gold: #eab308;
   --gold-tint: rgba(234, 179, 8, 0.4);
   --skeleton-shine: #2a2a30;
 
-  /* the one deliberate splash of hue in an otherwise neutral-gray UI: the
-     old accent violet, kept ONLY for "this is a clickable record" links
-     inside data tables (doador/fornecedor in FinanceTable) — a real
-     "primary" color precisely because it's used sparingly, not everywhere.
-     Named --link-primary, NOT --primary: shadcn's own --primary token
-     (var(--fg-1), wired up below for the unused shadcn/ui scaffolding)
-     already owns that name in this same :root block — reusing it here
-     would just get silently overwritten by that later declaration. Same
-     value in both themes on purpose (it's an identity color, not a surface
-     tone that needs to flip for contrast — it already reads fine on both a
-     near-black and a near-white background). */
   --link-primary: #8b5cf6;
   --link-primary-hover: #a78bfa;
   --link-primary-rgb: 139, 92, 246;
 
-  /* radius — a touch rounder across the board than the original 16/12/8/6
-     scale, still restrained (nothing pill-shaped except pills themselves). */
   --r-page: 20px;
   --r-lg: 14px;
   --r-md: 10px;
   --r-sm: 8px;
 
-  /* elevation — modals get the heaviest shadow; --shadow-card is the
-     everyday "this is a raised surface" one (cards, kpis, tables). A thin
-     inset highlight along the top edge is what reads as "raised" against a
-     near-black background — a plain drop shadow alone barely shows on dark
-     surfaces, so it's paired with one here, and swapped for a much softer
-     pair in light mode below (a bright bg needs far less shadow to read). */
   --shadow-modal: 0 24px 80px rgba(0, 0, 0, 0.7);
   --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 28px rgba(0, 0, 0, 0.32);
   --shadow-card-hover: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 36px rgba(0, 0, 0, 0.4);
 
-  /* top navbar: height + the floating gap above/below it, so the /grafo
-     full-height canvas (the only page that needs to know this) can size
-     itself against a single source of truth instead of a magic number. */
   --navbar-h: 52px;
   --navbar-gap: 12px;
   --navbar-offset: calc(var(--navbar-h) + var(--navbar-gap) * 2);
 
-  /* the one shared max-width every page's content — and the navbar itself —
-     is centered against, so the navbar lines up with the page below it
-     instead of stretching edge to edge. Matches the reading-column width
-     /politico/[id] already used (Tailwind's max-w-4xl). */
   --page-max-w: 896px;
 
-  /* shadcn/tailwind theme wiring, dark-only */
   --background: var(--bg);
   --foreground: var(--fg-1);
   --card: var(--card-tone);
@@ -153,11 +110,7 @@
   --primary-foreground: var(--bg);
   --secondary: var(--hover);
   --secondary-foreground: var(--fg-1);
-  /* NOTE: named --muted-surface (not --muted) on purpose — the kit's own
-     --muted/--muted-2 are TEXT colors used directly all over the app via
-     var(--muted); reusing that name here for a shadcn *background* token
-     would silently override it in this same :root block and make most of
-     the app's secondary text unreadably dark. Don't rename this back. */
+  /* Named --muted-surface, not --muted: --muted is a text color used app-wide. Don't rename. */
   --muted-surface: var(--card-tone);
   --muted-foreground: var(--muted-2);
   --destructive: var(--red);
@@ -179,15 +132,6 @@
   --sidebar-ring: var(--accent);
 }
 
-/* Light theme: only the base ground/text/accent tokens need overriding —
-   everything else (--background, --card, --ring, --sidebar-*, …) is
-   declared once in :root as var(--bg)/var(--accent)/etc, and CSS custom
-   properties resolve at use time, so they pick these up automatically.
-   Two selectors, same declarations: the media query is what makes "segue o
-   tema do dispositivo" work with zero JS (and zero flash, since the browser
-   resolves it during initial CSS parse); the attribute selector is what an
-   explicit choice from <ThemeToggle> overrides it with (see layout.tsx's
-   inline script for the no-flash bit of applying a saved choice). */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --bg: #ffffff;
@@ -237,26 +181,14 @@
 
 * { box-sizing: border-box; }
 
-/* Theme-toggle transition: kill the browser's default cross-fade on the
-   root snapshot so the only thing animating is the expanding-circle
-   clip-path <ThemeToggle> drives by hand (see its `pseudoElement:
-   "::view-transition-new(root)"` animate() call). Without this, the
-   default fade fights the circle and it just looks like a flicker. */
+/* No default cross-fade on theme toggle; it fights the ThemeToggle circle reveal. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
 }
 
-/* `a` lives inside @layer base (not bare/unlayered) on purpose: CSS cascade
-   layers rank ABOVE specificity — an unlayered rule beats every layered
-   rule no matter how specific, so a bare, unlayered `a { color: ... }`
-   would silently win over `.btn--primary` (a MORE specific class selector,
-   but inside @layer components) whenever a primary button is a <Link>/<a>.
-   That's exactly what was making primary-button links unreadable (near-
-   white text on a near-white button) — the class never got a chance to
-   apply. Keeping every color-bearing base rule in a real layer is what
-   lets .btn/.btn--primary's own colors win like they're supposed to. */
+/* Keep `a` color rules in @layer base: unlayered rules beat layered ones and break .btn--primary. */
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -299,27 +231,21 @@
   }
 }
 
-/* Tailwind v4 components layer sits below utilities, so utility classes
-   (h-3, w-40, mt-4, …) combined with these token classes still win — needed
-   since several call sites pair `.skeleton`/`.badge` etc with a sizing
-   utility. */
 @layer components {
 
-/* numbers, ids, money, hashes */
 .num, .mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- label ---------- */
+/* label */
 .label {
   font-size: 11px;
   font-weight: 500;
   color: var(--muted-2);
 }
 
-/* ---------- section title (politician profile etc.) — a real heading,
-   not a small mono caption ---------- */
+/* section title */
 .section-title {
   font-family: var(--font-mono);
   font-size: 21px;
@@ -330,7 +256,7 @@
   text-transform: capitalize;
 }
 
-/* ---------- card ---------- */
+/* card */
 .card {
   background: var(--card-tone);
   border: 1px solid var(--border-1);
@@ -340,18 +266,13 @@
   transition: border-color .15s ease, background-color .15s ease, transform .2s cubic-bezier(.16,1,.3,1),
     box-shadow .2s ease;
 }
-/* only clickable cards lift — a bare <button class="card"> or <a class="card">,
-   never a plain content container someone might expect to just sit there. */
 a.card:hover, button.card:hover {
   border-color: var(--border-2);
   transform: translateY(-2px);
   box-shadow: var(--shadow-card-hover);
 }
 
-/* ---------- entrance: a quiet fade + rise, played once as a section first
-   mounts (pure CSS, no JS/observer needed — plays automatically the moment
-   the element exists in the DOM, which for a server-rendered page is "on
-   load"). Stagger with an inline `animationDelay`, not more keyframes. ---------- */
+/* entrance */
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -363,9 +284,7 @@ a.card:hover, button.card:hover {
   .animate-in { animation: none; }
 }
 
-/* ---------- hero glow: a soft, slow-breathing radial blur behind the
-   landing page's hero — the one place the "primary" violet gets to show up
-   as pure atmosphere, not on any actual UI control. ---------- */
+/* hero glow */
 .hero-glow {
   position: absolute;
   inset: -20% -5% auto -5%;
@@ -386,7 +305,7 @@ a.card:hover, button.card:hover {
   .hero-glow { animation: none; }
 }
 
-/* ---------- signal card: severity is the left bar, never the fill ---------- */
+/* signal card */
 .signal {
   background: var(--card-tone);
   border: 1px solid var(--border-1);
@@ -412,10 +331,7 @@ a.card:hover, button.card:hover {
 }
 .signal__note--soft { border-color: rgba(var(--accent-rgb), 0.4); }
 
-/* ---------- cycle card: the ciclo IS the card — graph fills the whole
-   box, a gradient scrim pins the facts over its top edge, "grafo completo"
-   pins to the bottom-right corner. No header row above it, no
-   show/hide toggle. ---------- */
+/* cycle card */
 .cycle-card {
   position: relative;
   height: 320px;
@@ -451,8 +367,7 @@ a.card:hover, button.card:hover {
   background: var(--surface);
 }
 
-/* ---------- search result avatar: candidate photo when there's one on
-   file, first-letter initial otherwise — search-box.tsx + command-palette.tsx ---------- */
+/* search result avatar */
 .search-avatar {
   display: flex;
   align-items: center;
@@ -471,8 +386,7 @@ a.card:hover, button.card:hover {
   font-weight: 700;
 }
 
-/* ---------- social card: one declared social/site link — the platform's
-   own brand-colored icon, handle/URL, declared year ---------- */
+/* social card */
 .social-card {
   display: flex;
   align-items: center;
@@ -500,10 +414,7 @@ a.card:hover, button.card:hover {
   color: var(--muted-2);
 }
 
-/* ---------- tweet card: a flagged social post, laid out like an actual
-   X/Twitter post embed (avatar + name/handle/date row + body + a
-   decorative action row) instead of another rule/signal card — the whole
-   card is a link to the real post on X. ---------- */
+/* tweet card */
 .tweet-card {
   display: flex;
   gap: 12px;
@@ -556,7 +467,7 @@ a.card:hover, button.card:hover {
   font-size: 13px;
 }
 
-/* ---------- badge ---------- */
+/* badge */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -571,9 +482,6 @@ a.card:hover, button.card:hover {
 .badge--red    { color: var(--red);    border-color: var(--red-tint); }
 .badge--green  { color: var(--green);  border-color: var(--green-tint); }
 .badge--accent { color: var(--accent-2); border-color: rgba(var(--accent-rgb), 0.4); }
-/* solid, high-contrast flag -- for things that must never blend into the
-   row (e.g. "empresa de político" on a finance table), unlike the quieter
-   outlined .badge variants above. */
 .badge--flag {
   gap: 4px;
   padding: 3px 8px;
@@ -583,35 +491,17 @@ a.card:hover, button.card:hover {
   border-color: var(--red);
 }
 
-/* ---------- provenance seal: a small button that opens a modal (not an
-   inline dropdown — see components/ui/modal.tsx) ---------- */
-/* ---------- source analysis mode (see components/source-zone.tsx) ----------
-   A <SourceZone> is a no-op wrapper until the navbar's "fonte" toggle turns
-   `analysisMode` on; then every zone gets a solid green ring so people can
-   see what's inspectable, with a rotating "laser" ring + glow on hover, and
-   the pointer cursor signaling "click for source" (a click there opens the
-   provenance popup instead of the zone's normal behavior).
-
-   INSET, not outline: an outline (or an outward box-shadow) gets clipped by
-   any ancestor with `overflow: hidden` -- which `.table` has, for its own
-   rounded corners -- cutting the ring off along table row edges. An inset
-   box-shadow never paints past the element's own border box, so it can
-   never be clipped by anything, table rows included. */
+/* source analysis mode */
+/* Inset shadow, not outline: .table has overflow hidden and would clip an outline. */
 .source-zone {
   position: relative;
   isolation: isolate;
   cursor: pointer;
   border-radius: var(--r-sm);
-  /* A visible fill, not just a ring -- the point is nobody should have to
-     guess whether a block is clickable in analysis mode. */
   background: rgba(34, 197, 94, .12);
   box-shadow: inset 0 0 0 1.5px rgba(34, 197, 94, .55);
   transition: box-shadow .15s, background-color .15s, transform .15s;
 }
-/* The zone itself is the one clickable thing while analysis mode is on --
-   any link/button/etc. nested inside it stops taking its own clicks or
-   hover (no more double cursor/underline fighting the zone's own), so a
-   click anywhere always lands on the zone's onClickCapture. */
 .source-zone a, .source-zone button, .source-zone [role="button"] {
   pointer-events: none;
 }
@@ -621,11 +511,6 @@ a.card:hover, button.card:hover {
   transform: scale(1.02);
   box-shadow: inset 0 0 0 1.5px rgba(34, 197, 94, .9), 0 0 16px rgba(34, 197, 94, .35);
 }
-/* The "laser": a thin ring of the gradient rotating around the zone,
-   confined to the zone's own box via mask (not size, so it can never bleed
-   into a neighboring table row either). Chrome/Edge/Firefox 128+ animate
-   the custom property smoothly via @property below; older engines just see
-   a static ring -- still a fine fallback, no laser motion, nothing broken. */
 .source-zone--hover::before {
   content: "";
   position: absolute;
@@ -652,24 +537,7 @@ a.card:hover, button.card:hover {
   .source-zone--hover::before { animation: none; }
 }
 
-/* A <tr> is a special case, overridden right after the rules above so this
-   wins regardless of source order:
-   1. `position`, `transform` and an absolutely-positioned ::before on a
-      table-row box render inconsistently across browsers (rows collapsing,
-      the ring misplacing itself, cells misaligning) -- so no laser, no
-      scale, no repositioning, ever, on a <tr>.
-   2. No ALWAYS-ON background/box-shadow either, unlike every other zone.
-      A table is dozens of these sitting edge-to-edge -- tinting every row
-      at once doesn't read as "these are clickable", it reads as a wall of
-      green with doubled-up borders at every row boundary (inset shadows on
-      two adjacent rows both painting along the shared edge). The zone still
-      IS the whole row (cursor, click-to-open still fire anywhere in it) --
-      it just doesn't announce that with paint until you're actually on it.
-   3. The highlight is set on the <td>s, not the <tr> itself: a <tr>'s own
-      background/box-shadow can be masked by each <td>'s own painted
-      background (a child paints over its parent), including the table's
-      own `tr:hover td` rule -- painting straight onto the cells sidesteps
-      that entirely instead of fighting it. */
+/* tr: no position/transform/::before (table rows render inconsistently); highlight sits on td. */
 tr.source-zone {
   position: static;
   isolation: auto;
@@ -685,12 +553,7 @@ tr.source-zone--hover {
 tr.source-zone--hover::before {
   content: none;
 }
-/* `!important` + matching `.table`'s own ancestry, not just relying on
-   source order: `.table tbody tr:hover td { background: var(--hover) }`
-   fires from the SAME real mouse-over that sets `source-zone--hover`, and
-   without this it's a coin-flip (by specificity, a tie broken by source
-   order) whether the intended green or the table's own default grey hover
-   wins on any given cell. */
+/* !important so this beats `.table tbody tr:hover td` regardless of source order. */
 .table tr.source-zone--hover > td {
   background: rgba(34, 197, 94, 0.22) !important;
   box-shadow: inset 0 1.5px 0 0 rgba(34, 197, 94, .8), inset 0 -1.5px 0 0 rgba(34, 197, 94, .8);
@@ -715,7 +578,7 @@ tr.source-zone--hover::before {
 .seal__body dt, .seal__k { color: var(--muted-2); }
 .seal__body dd, .seal__v { margin: 0; color: var(--fg-1); word-break: break-all; }
 
-/* ---------- modal ---------- */
+/* modal */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 30;
   background: rgba(9, 9, 11, 0.7);
@@ -758,7 +621,7 @@ tr.source-zone--hover::before {
 .modal__close:hover { color: var(--fg-1); }
 .modal__body { padding: 16px; }
 
-/* ---------- table ---------- */
+/* table */
 .table {
   width: 100%;
   border: 1px solid var(--border-1);
@@ -788,14 +651,9 @@ tr.source-zone--hover::before {
 .table .num { font-size: 13px; text-align: right; white-space: nowrap; }
 .table tr.is-flagged td { background: var(--red-row); }
 
-/* the sparing splash of "primary" color — a record name that's actually a
-   link to its own ficha (doador/fornecedor rows), see --primary above. */
 .link-primary { color: var(--link-primary); }
 .link-primary:hover { color: var(--link-primary-hover); text-decoration: underline; }
 
-/* One bordered box holding both the table and its pagination — the
-   pagination is a footer INSIDE that box (matching background, no rule
-   above it), not a separate block hung off a divider line underneath. */
 .table-wrap {
   border: 1px solid var(--border-1);
   border-radius: var(--r-md);
@@ -810,8 +668,7 @@ tr.source-zone--hover::before {
   background: var(--card-tone);
 }
 
-/* ---------- empty state: icon + message (+ optional CLI hint) instead of a
-   single bare line of muted text (see components/ui/empty-state.tsx) ---------- */
+/* empty state */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -837,7 +694,7 @@ tr.source-zone--hover::before {
 }
 .empty-state--compact .empty-state__icon { font-size: 18px; }
 
-/* ---------- KPI grid: 1px gaps become the dividers ---------- */
+/* KPI grid */
 .kpis {
   display: grid;
   grid-auto-flow: column;
@@ -861,23 +718,13 @@ tr.source-zone--hover::before {
 .kpi__value--red { color: var(--red); }
 .kpi__sub { font-family: var(--font-mono); font-size: 12px; color: var(--muted-2); margin-top: 6px; }
 
-/* ---------- top navbar (sticky, floating, rounded — sits above the main
-   content column, beside the persistent sidebar) ----------
-   Two layers, on purpose: the navbar itself is a fully solid/opaque bar (no
-   see-through), and a separate full-width `.navbar-blur` layer sits behind
-   it, spanning a bit above and around it. That layer has no background of
-   its own — just a backdrop-filter blur, fading out via a mask so it's not
-   a hard-edged band — so content scrolling up gets progressively blurred as
-   it approaches, then disappears behind the solid bar. */
+/* top navbar */
 .navbar-wrap {
   position: sticky; top: 0; z-index: 20;
   height: var(--navbar-offset);
 }
 .navbar-blur {
-  /* backdrop-filter is set inline in topbar.tsx, not here: the build's CSS
-     minifier (Lightning CSS) was rewriting `backdrop-filter` + its
-     `-webkit-` fallback down to only the `-webkit-` form, which some
-     browsers then don't apply — inline style bypasses that transform. */
+  /* backdrop-filter is set inline in topbar.tsx: Lightning CSS drops its unprefixed form. */
   position: absolute; inset: 0;
   mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
@@ -893,8 +740,6 @@ tr.source-zone--hover::before {
   padding: 0 16px;
   border: 1px solid var(--border-1);
   border-radius: var(--r-page);
-  /* fully opaque — the frosted-glass look comes from .navbar-blur behind it,
-     not from this bar being see-through. */
   background: var(--surface);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   z-index: 2;
@@ -917,10 +762,7 @@ tr.source-zone--hover::before {
 
 .content__inner { padding: 0 28px 28px; max-width: var(--page-max-w); margin: 0 auto; }
 
-/* ---------- persistent left sidebar: logo, search trigger, global nav
-   (what used to live behind the navbar's hamburger), and the current
-   page's own "nesta página" índice when it has one — one column, always
-   visible, no dropdown to open. ---------- */
+/* persistent left sidebar */
 .shell-layout { display: flex; min-height: 100vh; }
 .shell-main { flex: 1 1 auto; min-width: 0; }
 
@@ -928,15 +770,17 @@ tr.source-zone--hover::before {
   flex: none;
   width: 248px;
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: 8px;
+  height: calc(100vh - 16px);
+  margin: 8px 0 8px 8px;
   overflow-y: auto;
   display: none;
   flex-direction: column;
   gap: 4px;
   padding: 20px 14px 16px;
-  border-right: 1px solid var(--border-1);
-  background: var(--surface);
+  border: 1px solid var(--border-1);
+  border-radius: var(--r-lg);
+  background: var(--card-tone);
 }
 @media (min-width: 1024px) {
   .app-sidebar { display: flex; }
@@ -957,7 +801,7 @@ tr.source-zone--hover::before {
 .navitem {
   display: flex; align-items: center; gap: 8px;
   padding: 7px 10px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   font-size: 13px;
   color: var(--muted);
   cursor: pointer;
@@ -965,6 +809,7 @@ tr.source-zone--hover::before {
   border: 0;
   width: 100%;
   text-align: left;
+  transition: background-color .12s ease, color .12s ease;
 }
 .navitem:hover { background: var(--hover); color: var(--muted); }
 .navitem.is-active { background: var(--active); color: var(--fg-1); }
@@ -978,7 +823,7 @@ tr.source-zone--hover::before {
 
 .btn--icon { padding: 7px 9px; font-size: 14px; line-height: 1; }
 
-/* ---------- buttons ---------- */
+/* buttons */
 .btn {
   display: inline-flex; align-items: center; gap: 7px;
   font-family: var(--font-sans);
@@ -999,10 +844,6 @@ tr.source-zone--hover::before {
 }
 .btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-foreground); }
 
-/* ---------- "fonte" analysis-mode toggle, active state (see topbar.tsx) --
-   deliberately NOT .btn--primary (that's a plain white/neutral fill) --
-   green, glowing, a little alive, so "modo análise" reads as its own
-   distinct mode rather than just another pressed button. */
 .btn--fonte-active {
   background: linear-gradient(135deg, rgba(34, 197, 94, .24), rgba(34, 197, 94, .08));
   border-color: rgba(34, 197, 94, .65);
@@ -1022,9 +863,7 @@ tr.source-zone--hover::before {
   .btn--fonte-active { animation: none; }
 }
 
-/* ---------- pagination (shadcn-style: ghost square buttons in a row,
-   numbered pages + chevrons, current page filled — not "anterior/próxima"
-   text links) ---------- */
+/* pagination */
 .pagination {
   display: flex; align-items: center; gap: 4px;
   font-family: var(--font-mono);
@@ -1053,7 +892,7 @@ tr.source-zone--hover::before {
   color: var(--muted-2);
 }
 
-/* ---------- input ---------- */
+/* input */
 .input {
   display: flex; align-items: center; gap: 8px;
   background: var(--card-tone);
@@ -1084,7 +923,7 @@ tr.source-zone--hover::before {
   padding: 1px 5px;
 }
 
-/* ---------- command palette ---------- */
+/* command palette */
 .palette__backdrop {
   position: fixed; inset: 0; z-index: 20;
   background: rgba(9, 9, 11, 0.7);
@@ -1125,7 +964,7 @@ tr.source-zone--hover::before {
 .palette__group { margin-left: auto; font-size: 12px; color: var(--muted-2); }
 .palette__empty { padding: 18px 16px; font-size: 13px; color: var(--muted-2); }
 
-/* ---------- skeleton ---------- */
+/* skeleton */
 @keyframes shimmer { 0% { background-position: -320px 0; } 100% { background-position: 320px 0; } }
 .skeleton {
   height: 12px;
@@ -1135,7 +974,7 @@ tr.source-zone--hover::before {
   animation: shimmer 1.4s linear infinite;
 }
 
-/* ---------- graph: cycle edges are the only animated thing ---------- */
+/* graph */
 @keyframes dash { to { stroke-dashoffset: -40; } }
 .edge          { stroke: var(--muted); stroke-width: 1.6; opacity: .55; }
 .edge--in      { stroke: var(--green); }
@@ -1144,4 +983,4 @@ tr.source-zone--hover::before {
 .node--focus   { stroke: var(--accent); stroke-width: 2; }
 .node--flagged { stroke: var(--red); stroke-width: 1.8; }
 
-} /* @layer components */
+}

@@ -82,10 +82,7 @@ export default async function DiscursoPage({ searchParams }: PageProps<"/sinais/
       <PageHeader group="Sinais" current="Discurso em rede social" />
 
       <section>
-        <div className="mono-label">
-          elosys/social + elosys/rules/social_review.py · contas de X declaradas ao TSE
-        </div>
-        <h1 className="mt-3 text-[26px] leading-tight font-medium tracking-tight">
+        <h1 className="text-[26px] leading-tight font-medium tracking-tight">
           Discurso pejorativo em posts públicos
         </h1>
         <p className="mt-4 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>

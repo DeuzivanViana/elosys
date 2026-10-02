@@ -1,6 +1,4 @@
-"""Detection rule: circular_donations, against synthetic campaign_donation/
-campaign_expense rows -- builds tiny graphs by hand and checks the rule finds
-(or correctly ignores) the loops in them."""
+"""Detection rule: circular_donations, against synthetic campaign_donation/"""
 
 from __future__ import annotations
 
@@ -51,8 +49,6 @@ def _expense(con, org_id, supplier_cpf_cnpj, amount_cents, expense_id):
 
 
 def test_finds_two_node_cycle(tmp_path):
-    """B's campaign pays A as a supplier, and separately receives a donation
-    FROM A -- money went out to A and came back from A: a 2-hop loop."""
     path = tmp_path / "t.db"
     create_schema(path)
     con = connect(path, write=True)
@@ -69,10 +65,10 @@ def test_finds_two_node_cycle(tmp_path):
 
     sig = con.execute("SELECT type, severity, explanation, amount_cents, path_length FROM signal").fetchone()
     assert sig["type"] == "circular_donation"
-    assert sig["severity"] == "high"  # 2-hop is <= HIGH_SEVERITY_MAX_LEN
+    assert sig["severity"] == "high"
     assert donor_a in sig["explanation"]
     assert sig["path_length"] == 2
-    assert sig["amount_cents"] == 10_000_00 + 8_000_00  # donation + expense, exact sum
+    assert sig["amount_cents"] == 10_000_00 + 8_000_00
 
     evidence_tables = {
         r["table_name"] for r in con.execute(
@@ -87,15 +83,14 @@ def test_finds_two_node_cycle(tmp_path):
 
 
 def test_ignores_a_straight_chain(tmp_path):
-    """A -> B -> C, no edge back to A: not a cycle, nothing should be flagged."""
     path = tmp_path / "t.db"
     create_schema(path)
     con = connect(path, write=True)
     _seed_source(con)
     _pid_b, org_b = _candidate(con, "22255588846", "CANDIDATA B", "300001")
     _pid_c, org_c = _candidate(con, "33366699957", "CANDIDATO C", "300002")
-    _donation(con, org_b, "11144477735", 10_000_00, "r1")  # A -> B
-    _donation(con, org_c, "22255588846", 5_000_00, "r2")   # B -> C
+    _donation(con, org_b, "11144477735", 10_000_00, "r1")
+    _donation(con, org_c, "22255588846", 5_000_00, "r2")
     con.commit()
 
     rep = rule.run(con)
@@ -105,8 +100,6 @@ def test_ignores_a_straight_chain(tmp_path):
 
 
 def test_max_depth_bounds_the_search(tmp_path):
-    """A 6-hop cycle isn't found at the default max_depth=5, but is found
-    once max_depth is raised to 6."""
     path = tmp_path / "t.db"
     create_schema(path)
     con = connect(path, write=True)
@@ -114,15 +107,12 @@ def test_max_depth_bounds_the_search(tmp_path):
     cpfs = ["11144477735", "22255588846", "33366699957", "44477700068", "55588811179", "66699922280"]
     org_ids = []
     for i, cpf in enumerate(cpfs):
-        # Everyone is a candidate here -- the cycle wraps all the way back to
-        # cpfs[0], so it too needs a campaign_org to receive the last edge.
         _pid, org_id = _candidate(con, cpf, f"CANDIDATO {i}", f"30000{i}")
         org_ids.append((cpf, org_id))
-    # chain: cpfs[0] -> cpfs[1] -> ... -> cpfs[5] -> cpfs[0], all via donations
     for i in range(len(cpfs)):
         target_cpf = cpfs[(i + 1) % len(cpfs)]
         target_org = next(oid for c, oid in org_ids if c == target_cpf)
-        _donation(con, target_org, cpfs[i], 2_000_00, f"r{i}")  # 6 x R$2.000 = R$12.000, above the floor
+        _donation(con, target_org, cpfs[i], 2_000_00, f"r{i}")
     con.commit()
 
     rep_default = rule.run(con)
@@ -132,13 +122,11 @@ def test_max_depth_bounds_the_search(tmp_path):
     assert rep_deeper["cycles_found"] == 1
     assert rep_deeper["signals"] == 1
     sig = con.execute("SELECT severity FROM signal").fetchone()
-    assert sig["severity"] == "medium"  # 6-hop is past HIGH_SEVERITY_MAX_LEN
+    assert sig["severity"] == "medium"
     con.close()
 
 
 def test_skips_cycle_below_min_amount(tmp_path):
-    """Same 2-hop shape as test_finds_two_node_cycle, but the total movement
-    (R$300) is below the default R$1.000 floor -- no signal should be written."""
     path = tmp_path / "t.db"
     create_schema(path)
     con = connect(path, write=True)
@@ -160,8 +148,6 @@ def test_skips_cycle_below_min_amount(tmp_path):
 
 
 def test_rerun_is_rewrite_only(tmp_path):
-    """Running twice doesn't duplicate signals -- same rewrite-only contract
-    as every other rule (see disproportionate_expense)."""
     path = tmp_path / "t.db"
     create_schema(path)
     con = connect(path, write=True)

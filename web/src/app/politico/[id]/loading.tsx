@@ -1,8 +1,5 @@
 import { Skeleton } from "@/components/skeleton";
 
-/** Covers the brief window before getPersonHeader() resolves on navigation
- * — everything below that point already streams in per-section behind its
- * own <Suspense> (see page.tsx), each with a skeleton shaped like itself. */
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-4xl pt-8">

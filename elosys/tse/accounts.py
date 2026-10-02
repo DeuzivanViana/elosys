@@ -1,48 +1,4 @@
-"""Crawler: TSE campaign finance (prestação de contas eleitorais) -> campaign_org,
-campaign_donation, campaign_expense and campaign_expense_payment.
-
-Source zip (one per election year):
-  https://cdn.tse.jus.br/estatistica/sead/odsele/prestacao_contas/
-      prestacao_de_contas_eleitorais_candidatos_{year}.zip
-
-Three files inside it:
-
-  - `receitas_candidatos_{year}_BRASIL.csv` — one row per revenue receipt
-    (`SQ_RECEITA`): who received it (campaign CNPJ + `SQ_CANDIDATO`), who gave
-    it (`NR_CPF_CNPJ_DOADOR`, name, CNAE if a company), how much
-    (`VR_RECEITA`) and how (PIX, transfer, own funds...).
-  - `despesas_contratadas_candidatos_{year}_BRASIL.csv` — one row per expense
-    contracted (`SQ_DESPESA`, accrual basis): who spent it (campaign CNPJ +
-    `SQ_CANDIDATO`), who was paid (`NR_CPF_CNPJ_FORNECEDOR`, name, CNAE), how
-    much (`VR_DESPESA_CONTRATADA`) and for what (`DS_ORIGEM_DESPESA`).
-  - `despesas_pagas_candidatos_{year}_BRASIL.csv` — one row per payment
-    installment (cash basis). Carries no CNPJ/candidacy/supplier of its own —
-    it only references the expense being paid via `SQ_DESPESA`, possibly
-    split into several `SQ_PARCELAMENTO_DESPESA` installments.
-
-This crawler makes one pass over each file per year and produces four tables:
-
-  - campaign_org: the distinct (year, candidacy, CNPJ) triples — the campaign
-    CNPJ map `consulta_cand` does not carry. Built from receitas.
-  - campaign_donation: every individual receipt, linked back to campaign_org.
-  - campaign_expense: every individual expense, linked back to campaign_org.
-  - campaign_expense_payment: every payment installment, linked back to
-    campaign_expense.
-
-Donor/supplier identity policy (see ADs/politician.md): neither ever creates a
-new row in `people`. `donor_person_id` / `supplier_person_id` is only set when
-they are already a known politician — either the counterparty candidacy field
-is filled (a candidate donating to / billing another candidate) or their CPF
-already belongs to someone in `people`. A one-off private citizen or a
-supplier stays as plain text; we are not in the business of building identity
-graphs for private individuals in a legal, public transaction.
-
-This crawler is independent: `run()` wipes only what it owns (`campaign_org`,
-`campaign_donation`, `campaign_expense`, `campaign_expense_payment`, its
-`companies`, its provenance rows) and rebuilds. It reads `people` /
-`politician_history` produced by `tse/candidates.py` to resolve identity, but
-does not require them.
-"""
+"""Crawler: TSE campaign finance (prestação de contas eleitorais) -> campaign_org,"""
 
 from __future__ import annotations
 
@@ -68,7 +24,7 @@ from ..util import brl_to_cents, clean_tse, digits_only, iso_date, normalize_nam
 log = get_logger("elosys.tse.accounts")
 
 PARSER_NAME = "tse.accounts"
-PARSER_VERSION = "4.0"  # 4.0: also loads campaign_expense_payment (despesas_pagas)
+PARSER_VERSION = "4.0"
 
 URL_TEMPLATE = (
     "https://cdn.tse.jus.br/estatistica/sead/odsele/prestacao_contas/"
@@ -93,10 +49,7 @@ SOURCE = dict(
 
 csv.field_size_limit(1 << 24)
 
-# Children before parents: campaign_expense_payment FK-references
-# campaign_expense; campaign_donation/campaign_expense FK-reference
-# campaign_org. reset_source() deletes in list order under
-# `PRAGMA foreign_keys = ON`.
+# Children before parents: reset_source deletes in order with foreign_keys=ON.
 _OWNED_TABLES = ["campaign_donation", "campaign_expense_payment", "campaign_expense", "campaign_org"]
 _LEDGER_FLUSH_EVERY = 200_000
 
@@ -172,14 +125,12 @@ def run(con: sqlite3.Connection, *, years: list[int] | None = None,
         log.warning("politician_history is empty — run `elosys tse-candidates` first "
                     "for identity to link up; continuing with CPF-only matching")
     rejected_cpf = {r["cpf"] for r in con.execute("SELECT cpf FROM rejected_cpf")}
-    # Preloaded once: lets a donation's donor_person_id resolve to an existing
-    # politician without ever creating a new `people` row for a plain donor.
     cpf_to_person = dict(con.execute("SELECT cpf, id FROM people WHERE cpf IS NOT NULL"))
 
     source_id = get_source(con, **SOURCE)
     report: dict = {"years": {}, "orgs": 0, "companies": 0, "donations": 0, "expenses": 0,
                      "payments": 0}
-    company_cache: dict[str, int] = {}  # scoped to this run() call only — see _get_company
+    company_cache: dict[str, int] = {}
 
     for year in years:
         report["years"][year] = _ingest_year(
@@ -346,10 +297,8 @@ def _ingest_year(con: sqlite3.Connection, year: int, tmp_dir: Path, source_id: i
 
 
 def _link_to_org(con: sqlite3.Connection, table: str, year: int) -> None:
-    """Backfill campaign_org_id on a ledger table after both it and campaign_org
-    are written for `year` — a single indexed UPDATE, not a second CSV pass."""
     con.execute(
-        f"UPDATE {table} SET campaign_org_id = ("  # noqa: S608 (table name is a literal from the caller)
+        f"UPDATE {table} SET campaign_org_id = ("  # noqa: S608
         "  SELECT co.id FROM campaign_org co"
         f"  WHERE co.year = {table}.year"
         f"    AND co.tse_candidacy_id = {table}.tse_candidacy_id"
@@ -359,8 +308,6 @@ def _link_to_org(con: sqlite3.Connection, table: str, year: int) -> None:
 
 
 def _link_payments_to_expense(con: sqlite3.Connection, year: int) -> None:
-    """Same idea as _link_to_org, but campaign_expense_payment only carries
-    SQ_DESPESA -- match campaign_expense on (year, tse_expense_id)."""
     con.execute(
         "UPDATE campaign_expense_payment SET campaign_expense_id = ("
         "  SELECT ce.id FROM campaign_expense ce"
@@ -415,7 +362,6 @@ def _scan_receitas(data: bytes, year: int, seen_org: set, orgs: list, don_batch:
         donor_raw = digits_only(_g(row, "NR_CPF_CNPJ_DOADOR"))
         donor_cpf = donor_raw if donor_raw and len(donor_raw) == 11 else None
         donor_cnpj = donor_raw if donor_raw and len(donor_raw) == 14 else None
-        # clean_tse() already maps the '-1' sentinel (no donor candidacy) to None.
         donor_candidacy = _g(row, "SQ_CANDIDATO_DOADOR")
 
         donor_person_id = None
@@ -474,7 +420,6 @@ def _scan_despesas(data: bytes, year: int, exp_batch: list, counts: dict, ph_per
         supplier_raw = digits_only(_g(row, "NR_CPF_CNPJ_FORNECEDOR"))
         supplier_cpf = supplier_raw if supplier_raw and len(supplier_raw) == 11 else None
         supplier_cnpj = supplier_raw if supplier_raw and len(supplier_raw) == 14 else None
-        # clean_tse() already maps the '-1' sentinel (no supplier candidacy) to None.
         supplier_candidacy = _g(row, "SQ_CANDIDATO_FORNECEDOR")
 
         supplier_person_id = None
@@ -520,8 +465,6 @@ def _scan_despesas(data: bytes, year: int, exp_batch: list, counts: dict, ph_per
 
 def _scan_pagas(data: bytes, year: int, pay_batch: list, counts: dict,
                 con: sqlite3.Connection, parse_id: int, rc: RowCounter) -> None:
-    """despesas_pagas rows carry no CNPJ/candidacy/supplier — just a payment
-    against an existing SQ_DESPESA. No identity resolution needed here."""
     reader = csv.DictReader(
         io.TextIOWrapper(io.BytesIO(data), encoding="latin-1", newline=""), delimiter=";")
     now = now_utc()
@@ -555,7 +498,6 @@ def _scan_pagas(data: bytes, year: int, pay_batch: list, counts: dict,
 
 
 def _get_company(con: sqlite3.Connection, cnpj: str, *, kind: str, cache: dict[str, int]) -> int:
-    """Get-or-create by CNPJ. `cache` is scoped to one run() call (see run())."""
     cached = cache.get(cnpj)
     if cached is not None:
         return cached

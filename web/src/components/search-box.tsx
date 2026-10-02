@@ -2,10 +2,6 @@
 
 import { useShell } from "./shell/shell-context";
 
-/** The home hero's search field — a trigger, not its own search widget: a
- * click/focus opens the same command palette used everywhere else (Ctrl+K,
- * the sidebar's icon button), instead of duplicating a second inline
- * search/results implementation. */
 export function SearchBox() {
   const { setPaletteOpen } = useShell();
 

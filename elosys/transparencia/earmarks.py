@@ -1,36 +1,4 @@
-"""Crawler: Portal da Transparência Emendas Parlamentares -> parliamentary_earmark
-+ parliamentary_earmark_beneficiary.
-
-Unlike CEIS/CNEP (sanctions.py), this is not a daily snapshot: the portal
-serves ONE file covering the whole history (2014-today) at a fixed URL
-("Baixar arquivo único"). So this is a plain rewrite-only bulk import, same
-as every TSE crawler -- no per-year/per-candidate requests at all.
-
-The zip has three CSVs; only two are ingested (the third, `_Convenios`, is
-a smaller per-convênio detail file that duplicates information already in
-the other two for this project's purposes and isn't needed):
-
-  EmendasParlamentares.csv           -> parliamentary_earmark
-    One row per emenda: who authored it and how much moved. The author is
-    identified only by a source-internal code + free-text name -- there is
-    no CPF here. Matched against politician_history (DEPUTADO FEDERAL /
-    SENADOR only, since only they author emendas) by normalized name. Per
-    ADs/identidade.md (no name-only identity matching), this NEVER writes
-    to `people` -- `author_person_id` is a "provável" cross-reference, and
-    an ambiguous name (2+ people with that normalized name in that office)
-    is left unmatched rather than guessed.
-
-  EmendasParlamentares_PorFavorecido.csv -> parliamentary_earmark_beneficiary
-    One row per (emenda, beneficiary, month): who actually received the
-    money. When the beneficiary is a company (Pessoa Jurídica), its CNPJ is
-    a deterministic match against `companies.cnpj` -- no ambiguity, unlike
-    the author name match. Deliberately does NOT create new `companies`
-    rows for beneficiaries we don't already know about (unlike
-    sanctions.py's CEIS/CNEP companies): the whole point here is to answer
-    "did a company we ALREADY track as a donor/supplier also cash a
-    parliamentary earmark", not to grow the company catalog with every
-    entity that ever received any federal transfer.
-"""
+"""Crawler: Portal da Transparência Emendas Parlamentares -> parliamentary_earmark"""
 
 from __future__ import annotations
 
@@ -125,8 +93,6 @@ def run(con: sqlite3.Connection, *, tmp_dir: str | Path = "dados_tmp") -> dict:
 
 
 def _load_author_index(con: sqlite3.Connection) -> dict[str, int | None]:
-    """normalized name -> person_id, or None if 2+ different people share that
-    normalized name (ambiguous -- left unmatched, never guessed)."""
     placeholders = ", ".join("?" * len(_EARMARK_AUTHOR_OFFICES))
     rows = con.execute(
         f"""SELECT DISTINCT person_id, ballot_name, full_name FROM politician_history

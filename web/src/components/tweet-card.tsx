@@ -8,10 +8,6 @@ function fmtTweetDate(raw: string | null): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-/** A flagged post, laid out like an actual X/Twitter post embed — avatar,
- * name/handle/date row, body text, a purely decorative action row (no
- * counts to show, just the familiar silhouette) — instead of looking like
- * another rule/signal card. The whole thing links out to the real post. */
 export function TweetCard({ post, fallbackName }: { post: DiscourseSignal; fallbackName: string }) {
   const name = post.personName ?? fallbackName;
   const initial = (name || post.handle || "?").trim().charAt(0).toUpperCase();

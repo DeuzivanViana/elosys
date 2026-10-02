@@ -1,9 +1,5 @@
 import { Skeleton } from "@/components/skeleton";
 
-/** Next.js wraps `page.tsx` in a <Suspense> automatically when a sibling
- * `loading.tsx` exists — this is what shows the instant the route is hit,
- * swapped out for the real page the moment its data resolves. Shaped like
- * the home page itself so the swap doesn't jump around. */
 export default function Loading() {
   return (
     <div className="flex flex-col gap-10">

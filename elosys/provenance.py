@@ -1,16 +1,4 @@
-"""Shared provenance/collection module — every source goes through here.
-
-Guarantees the provenance chain (see ADs/confiabilidade.md):
-    source -> collection -> collection_file -> parse -> record
-
-We do NOT store payloads: only URL + accessed_at + sha256. The downloaded file
-is temporary and is deleted after parsing.
-
-Execution is rewrite-only (see ADs/imutabilidade.md): the database is built from
-an empty file in a single run. The integrity anchor is `manifest.json`
-(`write_manifest`), committed to git; `verify` re-downloads the sources and
-checks their hashes against it.
-"""
+"""Shared provenance/collection module — every source goes through here."""
 
 from __future__ import annotations
 
@@ -27,10 +15,9 @@ from .util import canonical_json, git_commit, now_utc
 
 _TIMEOUT = 300
 _RETRIES = 4
-_BACKOFF = 5  # seconds: 5, 10, 20...
+# Akamai blocks by TLS fingerprint; curl_cffi impersonate passes.
+_BACKOFF = 5
 
-# The TSE (Akamai Bot Manager) blocks by TLS/JA3 fingerprint. curl_cffi's
-# `impersonate` mimics a real Chrome handshake, which passes.
 _IMPERSONATE = "chrome"
 _HEADERS = {"Accept": "*/*", "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8"}
 
@@ -64,7 +51,6 @@ def get_source(con: sqlite3.Connection, *, name: str, agency: str, type: str,
 
 
 def download(url: str, dest: str | Path) -> tuple[int, str | None]:
-    """Download url -> dest with retries. Returns (http_status, content_type)."""
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     last_error: Exception | None = None
@@ -97,11 +83,6 @@ def record_collection(con: sqlite3.Connection, *, source_id: int, url: str,
                       file: str | Path, http_status: int | None,
                       content_type: str | None,
                       notes: str | None = None) -> tuple[int, bool]:
-    """Record a collection. Dedup by (url, payload_sha256).
-
-    Returns (collection_id, is_new). is_new is False when the same file from the
-    same URL was already recorded in this build — the caller may skip reprocessing.
-    """
     sha, size = sha256_file(file)
     existing = con.execute(
         "SELECT id FROM collection WHERE url = ? AND payload_sha256 = ? ORDER BY id LIMIT 1",
@@ -154,14 +135,9 @@ def record_parse(con: sqlite3.Connection, *, collection_id: int, parser_name: st
 
 
 def reset_source(con: sqlite3.Connection, source_name: str, data_tables: list[str]) -> None:
-    """Wipe everything a crawler owns, so it can be re-run independently.
-
-    Deletes the crawler's data rows first, then its provenance rows (parse ->
-    collection_file -> collection) for `source_name`. Other sources are untouched.
-    """
     row = con.execute("SELECT id FROM source WHERE name = ?", (source_name,)).fetchone()
     for table in data_tables:
-        con.execute(f"DELETE FROM {table}")  # noqa: S608 (table names are literals from the caller)
+        con.execute(f"DELETE FROM {table}")  # noqa: S608
     if row is not None:
         sid = row["id"]
         con.execute(
@@ -175,7 +151,6 @@ def reset_source(con: sqlite3.Connection, source_name: str, data_tables: list[st
 
 
 def manifest(con: sqlite3.Connection) -> dict:
-    """The build's input manifest: every source file with its hash."""
     out: list[dict] = []
     for c in con.execute(
         "SELECT c.id, s.name AS source, c.url, c.http_status, c.accessed_at, "
@@ -206,11 +181,6 @@ def write_manifest(con: sqlite3.Connection, path: str | Path) -> Path:
 
 
 def verify(con: sqlite3.Connection) -> list[dict]:
-    """Re-download every collection URL and check its hash. Returns mismatches.
-
-    An empty list means the whole database can be rebuilt from the same public
-    files. A non-empty list means a source changed its file since the build.
-    """
     mismatches: list[dict] = []
     for c in con.execute(
         "SELECT id, url, payload_sha256 FROM collection ORDER BY id"
@@ -228,7 +198,6 @@ def verify(con: sqlite3.Connection) -> list[dict]:
     return mismatches
 
 
-# canonical_json kept for stable hashing of derived-rule params (ADs/dados_derivados.md).
 __all__ = [
     "sha256_file", "sha256_bytes", "get_source", "download", "record_collection",
     "record_file", "record_parse", "reset_source", "manifest", "write_manifest",

@@ -1,23 +1,4 @@
-"""Collect and ingest TSE `consulta_cand` -> politician_history.
-
-Source: https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_YYYY.zip
-CSV: latin-1 encoding, ';' separator, null sentinels '#NULO#'/'#NE#'/'-N'.
-
-LAYOUT: header with CD_*/DS_*/NM_* columns, for every supported year including
-2014/2016. TSE originally published those two with a legacy header-less layout,
-but has since reprocessed and republished them in the current header format
-(the file we download today has DT_GERACAO stamped years after the election —
-e.g. the 2014 file was regenerated in 2021). 2014 and 2016 simply carry fewer
-columns than 2018+ (no DS_DETALHE_SITUACAO_CAND, no VR_DESPESA_MAX_CAMPANHA,
-...) — `_g()` already tolerates a missing column (-> None), so no separate
-parser is needed. Verified against the live files before enabling them here.
-
-Two phases (rewrite-only build, see ADs/imutabilidade.md):
-  1. ingest_year(): download -> record collection -> parse rows into a TEMP
-     staging table (`stg_candidate`, this connection only).
-  2. promote():     with all years staged, drop ambiguous CPFs, resolve identity,
-                    move rows into politician_history, drop the staging table.
-"""
+"""Collect and ingest TSE `consulta_cand` -> politician_history."""
 
 from __future__ import annotations
 
@@ -43,7 +24,7 @@ from ..util import clean_tse, digits_only, iso_date, normalize_name, now_utc
 log = get_logger("elosys.tse.candidates")
 
 PARSER_NAME = "tse.candidates"
-PARSER_VERSION = "2.0"  # 2.0: rewrite-only build; TEMP staging; no raw_data
+PARSER_VERSION = "2.0"
 
 URL_TEMPLATE = "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_{year}.zip"
 SUPPORTED_YEARS = (2014, 2016, 2018, 2020, 2022, 2024, 2026)
@@ -63,7 +44,6 @@ SOURCE = dict(
 
 csv.field_size_limit(1 << 24)
 
-# columns written to politician_history by promote(), in order.
 _PH_COLUMNS = (
     "person_id", "cpf", "cpf_trusted", "voter_id", "ballot_name", "full_name",
     "normalized_name", "tse_candidacy_id", "year", "election_type", "round", "office",
@@ -89,16 +69,11 @@ def create_staging(con: sqlite3.Connection) -> None:
     con.execute(_STG_DDL)
 
 
-# Leaf tables this crawler fully owns. `people` is shared identity — not wiped
-# here; resolve_person reuses existing rows by voter_id/cpf, so re-running is safe.
-# Orphan `people` rows (from data that changed between runs) are harmless; a full
-# clean rebuild is `rm elosys.db` + init-db + re-run every crawler.
 _OWNED_TABLES = ["politician_history", "rejected_cpf"]
 
 
 def run(con: sqlite3.Connection, *, years: list[int] | None = None,
         tmp_dir: str | Path = "dados_tmp") -> dict:
-    """Full crawler entrypoint: wipe, stage every year, promote. Rewrite-only."""
     years = years or list(SUPPORTED_YEARS)
     log.info("rewrite-only: politician_history will contain exactly these years: %s",
              ", ".join(map(str, years)))
@@ -144,7 +119,6 @@ def _int(v: str | None) -> int | None:
 
 
 def _exact_digits(v: str | None, n: int) -> str | None:
-    """digits_only, but only if it has exactly n digits (masked/partial -> None)."""
     d = digits_only(v)
     return d if d and len(d) == n else None
 
@@ -188,7 +162,6 @@ def _csv_members(zf: zipfile.ZipFile) -> list[str]:
 
 
 def ingest_year(con: sqlite3.Connection, year: int, tmp_dir: str | Path) -> dict:
-    """Download one year and stage its rows into the TEMP staging table."""
     if year not in SUPPORTED_YEARS:
         raise ValueError(f"unsupported year: {year}")
 
@@ -198,7 +171,6 @@ def ingest_year(con: sqlite3.Connection, year: int, tmp_dir: str | Path) -> dict
     zip_path = Path(tmp_dir) / f"consulta_cand_{year}.zip"
 
     if zip_path.exists():
-        # File already present (e.g. downloaded manually in a browser).
         status, ctype = None, "application/zip"
         notes = "TSE CDN; file provided locally (manual download). URL is canonical."
         keep_file = True
@@ -258,12 +230,6 @@ def _stage_csv(con: sqlite3.Connection, data: bytes, file_year: int, parse_id: i
 
 
 def promote(con: sqlite3.Connection) -> dict:
-    """Clean ambiguous CPFs, resolve identity, move staged rows into politician_history.
-
-    Ambiguous CPF (always dropped -> NULL; the value is kept in rejected_cpf):
-      - a CPF value tied to more than one distinct voter_id, or
-      - a CPF whose voter_id also carries other CPFs (typo either way).
-    """
     create_staging(con)
     now = now_utc()
     con.execute(
@@ -306,7 +272,7 @@ def promote(con: sqlite3.Connection) -> dict:
             con.execute(insert_sql, {c: d[c] for c in _PH_COLUMNS})
             promoted += 1
         except sqlite3.IntegrityError:
-            skipped += 1  # (year, tse_candidacy_id, round) already in politician_history
+            skipped += 1
 
     con.execute("DROP TABLE stg_candidate")
     con.commit()

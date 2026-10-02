@@ -19,8 +19,6 @@ import { EntityNode } from "./graph/entity-node";
 import { FloatingEdge } from "./graph/floating-edge";
 import type { GraphEdgeData, GraphNodeData } from "./graph/types";
 
-// Same node/edge components, palette and floating-edge geometry as /grafo --
-// this is the depth-2 politician-to-politician slice of that same graph.
 const nodeTypes = { entity: EntityNode };
 const edgeTypes = { floating: FloatingEdge };
 
@@ -29,13 +27,11 @@ type NetEdge = Edge<GraphEdgeData, "floating">;
 
 const CENTER_R = 32;
 const NODE_R = 22;
-const NODE_BOX_H = 88; // circle + label + kind label -> vertical room one node needs
+const NODE_BOX_H = 88;
 const MIN_BAND = NODE_BOX_H + 6;
-const CHILD_ROW = NODE_BOX_H; // vertical pitch between level-2 siblings
+const CHILD_ROW = NODE_BOX_H;
 const PAD_Y = 20;
 const WIDTH = 1040;
-// Pan a little, never enough to drag the whole thing off-screen (unlike the
-// free-roam /grafo). translateExtent + a tight zoom range.
 const PAN_MARGIN = 140;
 
 function toNode(n: PoliticianNetworkNode, x: number, y: number): NetNode {
@@ -59,9 +55,6 @@ function toNode(n: PoliticianNetworkNode, x: number, y: number): NetNode {
   };
 }
 
-// Money IN (received) is green; money OUT (donated by the candidate) is the
-// brand violet — two clearly different colors, per direction, never both
-// green. A reciprocal pair (circular) overrides both to red further down.
 function toEdge(donorId: string, recipientId: string, amountCents: number, direction: "in" | "out", faint = false): NetEdge {
   const color = direction === "in" ? "var(--green)" : "var(--accent-2)";
   const w = Math.min(2.6, 0.6 + Math.log10(Math.max(1, amountCents) / 100) * 0.4);
@@ -85,15 +78,13 @@ function layoutSide(
   let cursor = (totalHeight - sideHeight) / 2;
   const nodes: NetNode[] = [];
   const edges: NetEdge[] = [];
-  const direction = side === "left" ? "in" : "out"; // left = they gave TO the candidate, right = candidate gave TO them
+  const direction = side === "left" ? "in" : "out";
 
   branches.forEach((b, i) => {
     const bandHeight = bandHeights[i];
     const parentY = cursor + bandHeight / 2;
     const parentId = `p${b.node.personId}`;
     nodes.push(toNode(b.node, centerX, parentY));
-    // money flows donor -> recipient: left = level-1 donated TO the center;
-    // right = the center donated TO level-1.
     edges.push(
       side === "left"
         ? toEdge(parentId, "center", b.node.amountCents, direction)
@@ -144,13 +135,6 @@ function Inner({
       },
     };
 
-    // A person who BOTH received from and donated to the candidate (at the
-    // top level, directly connected to "center") is a real, visible circular
-    // flow in this exact dataset — not a guess. Mark it: red ring on the
-    // node, both edges turn red/dashed regardless of direction. (A cycle
-    // that only closes through an *expense*, not a donation, can't be seen
-    // from this donation-only network — see the "sinais de alerta" section
-    // above for those, via the full-graph rule.)
     const leftTopIds = new Set(receivedFrom.map((b) => `p${b.node.personId}`));
     const rightTopIds = new Set(donatedTo.map((b) => `p${b.node.personId}`));
     const circularIds = new Set([...leftTopIds].filter((id) => rightTopIds.has(id)));
@@ -158,11 +142,7 @@ function Inner({
     const bumpedLeft = bump(left.nodes);
     const bumpedRight = bump(right.nodes);
 
-    // A person can legitimately appear on both sides (donated to the center
-    // AND received from them) or as both a level-1 and level-2 node on the
-    // same side — dedupe by id or React Flow renders duplicate-keyed nodes,
-    // which thrashes re-renders. Keep the LEFT position when both exist so
-    // circular nodes land on the donor side.
+    // Dedupe by id, or React Flow renders duplicate keys. Keep the LEFT position.
     const seen = new Set<string>();
     const allNodes = [centerNode, ...bumpedLeft, ...bumpedRight]
       .filter((n) => {

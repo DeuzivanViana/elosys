@@ -1,20 +1,4 @@
-"""Coleta de posts/replies do X de contas declaradas por candidatos ao TSE.
-
-Fluxo:
-  1. Lê `social_media` (platform='x'), normaliza o handle, deduplica e
-     (opcional) filtra por quem foi ELEITO — nunca adivinha handle.
-  2. Faz upsert em `social_account`.
-  3. Por conta: monta as queries `from:<handle> (termo OR termo ...)` a partir
-     de `elosys.social.lexicon` e roda o ator apidojo/tweet-scraper na Apify.
-  4. Arquiva cada tweet em `social_post` com o item cru + sha256 + retrieved_at
-     (o tweet é efêmero; ver o comentário no schema.sql).
-
-NÃO é rewrite-only e NÃO passa pelo manifest/verify. Incremental: rode de
-novo pra cobrir mais contas; `--refresh` re-coleta contas já visitadas.
-
-Run: `elosys social-x --db elosys.db --scope federal --limit 15`
-     (precisa de APIFY_TOKEN no ambiente)
-"""
+"""Coleta de posts/replies do X de contas declaradas por candidatos ao TSE."""
 
 from __future__ import annotations
 
@@ -35,11 +19,8 @@ NETWORK = "x"
 DEFAULT_SINCE = "2019-01-01"
 DEFAULT_MAX_ITEMS = 120
 DEFAULT_MIN_WEIGHT = "baixa"
-# contas por chamada do ator: o ator roda os `19 * batch_size` searchTerms em
-# série, ~0,6s cada — batch 30 (~570 termos) estoura o timeout de 30min; batch
-# 10 (~190 termos) fecha em ~7min.
 DEFAULT_BATCH_SIZE = 10
-DEFAULT_WORKERS = 4        # plano Free da Apify permite 5 execuções concorrentes; deixa 1 de folga
+DEFAULT_WORKERS = 4
 
 _HANDLE_RE = re.compile(r"(?:twitter\.com(?:\.br)?|x\.com)/@?([A-Za-z0-9_]{1,15})", re.I)
 _RESERVED = {
@@ -47,12 +28,11 @@ _RESERVED = {
     "messages", "settings", "compose", "login", "signup", "about", "tos", "privacy",
 }
 
-# office LIKE ... AND result LIKE 'ELEITO%'
 _SCOPES: dict[str, str] = {
     "federal": "(ph.office LIKE '%DEPUTADO FEDERAL%' OR ph.office LIKE '%SENADOR%')",
     "deputados": "ph.office LIKE '%DEPUTADO%'",
     "electeds": "1=1",
-    "all": None,  # no politician_history join at all
+    "all": None,
 }
 
 SOURCE = dict(
@@ -73,8 +53,6 @@ SOURCE = dict(
 
 
 def _compile_lexicon() -> list[tuple[str, re.Pattern]]:
-    """(termo, regex) — palavra isolada casa com fronteira de palavra;
-    frase casa como substring. Evita 'foca' dentro de 'foragido' etc."""
     out: list[tuple[str, re.Pattern]] = []
     for _cat, term, _w, _n in all_terms():
         t = term.lower()
@@ -115,8 +93,6 @@ def run(
     with step(log, "resolver handles declarados ao TSE"):
         targets = _resolve_targets(con, source_id, scope, handles)
     if not refresh:
-        # anything not yet ended in a real result (active/empty) is fair game —
-        # covers pending, error, and half-marked rows from an interrupted run
         targets = [t for t in targets if t["status"] not in ("active", "empty")]
     if limit:
         targets = targets[:limit]
@@ -146,7 +122,7 @@ def run(
             handles_in_batch = {t["handle"] for t in batch}
             try:
                 run_id, items, flat_queries = fut.result()
-            except Exception as e:  # noqa: BLE001 (um lote ruim não mata os outros)
+            except Exception as e:  # noqa: BLE001
                 log.warning("  lote (%d contas, @%s...): %s", len(batch), batch[0]["handle"], e)
                 for t in batch:
                     _mark(con, t["id"], "error")
@@ -205,7 +181,6 @@ def _resolve_targets(
             h = normalize_handle(r["url"])
             if h in wanted and h not in picked:
                 picked[h] = dict(r)
-        # allow handles that aren't in social_media too (manual additions)
         for h in wanted:
             picked.setdefault(h, {"person_id": None, "url": None, "provenance_id": None})
         chosen = [(h, d) for h, d in picked.items()]
@@ -217,7 +192,7 @@ def _resolve_targets(
             join = "JOIN politician_history ph ON ph.person_id = sm.person_id"
             where += f" AND {cond} AND ph.result LIKE 'ELEITO%'"
         rows = con.execute(
-            f"SELECT DISTINCT sm.person_id, sm.url, sm.provenance_id "  # noqa: S608 (cond is a literal)
+            f"SELECT DISTINCT sm.person_id, sm.url, sm.provenance_id "  # noqa: S608
             f"FROM social_media sm {join} WHERE {where}"
         ).fetchall()
         picked = {}
@@ -253,8 +228,6 @@ def _resolve_targets(
 
 
 def _mark(con: sqlite3.Connection, account_id: int, status: str) -> None:
-    # 'error' keeps last_crawled_at NULL so a transient Apify timeout is retried
-    # on the next run without --refresh; a real result (active/empty) is done.
     if status == "error":
         con.execute("UPDATE social_account SET status = 'error' WHERE id = ?", (account_id,))
     else:
@@ -267,9 +240,6 @@ def _mark(con: sqlite3.Connection, account_id: int, status: str) -> None:
 def _fetch_batch(
     batch: list[dict], min_weight: str, max_items: int, since: str
 ) -> tuple[str, list[dict], list[str]]:
-    """Network only — safe in a worker thread. Runs ONE actor call for the whole
-    batch: every account's `from:<handle> (...)` queries concatenated into one
-    searchTerms list. Results are routed back to accounts by author later."""
     flat_queries: list[str] = []
     for t in batch:
         flat_queries.extend(
@@ -344,7 +314,6 @@ def _store_post(
 
 
 def stats(con: sqlite3.Connection) -> dict:
-    """Ad-hoc: distribuição do que já foi coletado."""
     out: dict = {}
     out["accounts"] = dict(
         con.execute(
@@ -360,7 +329,7 @@ def stats(con: sqlite3.Connection) -> dict:
     return out
 
 
-if __name__ == "__main__":  # smoke: só a normalização, sem rede
+if __name__ == "__main__":
     for u in [
         "https://twitter.com/adriventurasp", "www.twitter.com/deputadoserafim",
         "https://x.com/adriana_accorsi?s=21&t=abc", "https://twitter.com/@motta_afonso",

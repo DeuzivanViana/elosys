@@ -51,10 +51,7 @@ export default async function CircularDonationsPage({
       <PageHeader group="Sinais" current="Doação circular" />
 
       <section>
-        <div className="mono-label">
-          elosys/rules/circular_donations.py · algoritmo local (Tarjan SCC + DFS limitado em profundidade)
-        </div>
-        <h1 className="mt-3 text-[26px] leading-tight font-medium tracking-tight">
+        <h1 className="text-[26px] leading-tight font-medium tracking-tight">
           Loops de doação/despesa entre campanhas
         </h1>
         <p className="mt-4 max-w-2xl text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>

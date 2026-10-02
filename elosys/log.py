@@ -1,9 +1,4 @@
-"""Console logging for the crawlers.
-
-Every crawler logs to stderr with timestamps, and prints a short summary block
-per step. The goal is that running `elosys tse-accounts` reads like a report:
-what URL was hit, how big the file was, its hash, how many rows came out.
-"""
+"""Console logging for the crawlers."""
 
 from __future__ import annotations
 
@@ -20,7 +15,7 @@ def get_logger(name: str = "elosys") -> logging.Logger:
     global _CONFIGURED
     if not _CONFIGURED:
         stream = sys.stderr
-        # Windows consoles default to cp1252 and choke on non-ASCII; force UTF-8.
+        # Windows consoles default to cp1252; force UTF-8 so accented log lines do not crash.
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
             try:
@@ -38,7 +33,6 @@ def get_logger(name: str = "elosys") -> logging.Logger:
 
 @contextmanager
 def step(log: logging.Logger, label: str) -> Iterator[None]:
-    """Bracket a unit of work with '▶ label' / '✓ label (Ns)'."""
     log.info("[>] %s", label)
     start = time.monotonic()
     try:
@@ -57,8 +51,6 @@ def human_bytes(n: int) -> str:
 
 
 class RowCounter:
-    """Logs progress every `every` rows while iterating a large file."""
-
     def __init__(self, log: logging.Logger, label: str, every: int = 250_000):
         self.log = log
         self.label = label

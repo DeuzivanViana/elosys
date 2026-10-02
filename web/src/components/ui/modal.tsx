@@ -3,9 +3,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
-/** Generic centered modal, rendered via portal to <body> so it always sits
- * above everything regardless of where it's triggered from. Closes on
- * Escape, backdrop click, or the × button. */
 export function Modal({
   title, onClose, children,
 }: { title?: string; onClose: () => void; children: React.ReactNode }) {

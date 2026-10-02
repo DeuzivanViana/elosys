@@ -16,8 +16,6 @@ const SHORTCUTS = [
   { href: "/sinais/discurso", label: "Sinais · Discurso em rede social" },
 ];
 
-/** Always-mounted (in Topbar) so Ctrl/Cmd+K opens the palette from anywhere,
- * independent of whether <CommandPalette> itself is currently mounted. */
 export function useCommandPaletteShortcut() {
   const { paletteOpen, setPaletteOpen } = useShell();
   useEffect(() => {
@@ -32,9 +30,6 @@ export function useCommandPaletteShortcut() {
   }, [paletteOpen, setPaletteOpen]);
 }
 
-// Only mounted while open (see CommandPaletteMount in topbar.tsx) — its
-// query/results state resets for free on each open/close instead of an
-// effect clearing it, and Escape-to-close only needs to work while mounted.
 export function CommandPalette() {
   const { setPaletteOpen } = useShell();
   const router = useRouter();
@@ -73,8 +68,6 @@ export function CommandPalette() {
     };
   }, [trimmed]);
 
-  // Derived, not stored: avoids a setState-in-effect just to clear stale
-  // results when the query shrinks below the search threshold.
   const shownResults = trimmed.length < 2 ? [] : results;
 
   const go = (href: string) => {

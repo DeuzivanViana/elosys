@@ -36,10 +36,6 @@ export default async function PoliticoPage({ params, searchParams }: PageProps<"
   const financeYears = getExpenseYears();
   const year = Number.isInteger(anoParam) && financeYears.includes(anoParam) ? anoParam : undefined;
 
-  // Identity + all-time overview: the "dados imutáveis" that open the page.
-  // Fast, indexed lookups — rendered immediately, never behind a skeleton.
-  // Everything below this is a separate query, each streamed independently
-  // in its own <Suspense> boundary so a slow section never blocks the rest.
   const header = getPersonHeader(personId);
   if (!header) notFound();
   const { person, latestCandidacy } = header;
@@ -154,11 +150,6 @@ export default async function PoliticoPage({ params, searchParams }: PageProps<"
   );
 }
 
-// ---------------------------------------------------------------------
-// Sections — each an independent async Server Component so it can suspend
-// (and stream in) on its own, behind its own skeleton, instead of the whole
-// page blocking on whichever query happens to be slowest.
-// ---------------------------------------------------------------------
 
 async function NetworkSection({ personId, displayName }: { personId: number; displayName: string }) {
   const network = getPoliticianDonationNetwork(personId);
@@ -265,9 +256,6 @@ async function SignalsSection({ personId, personCpf }: { personId: number; perso
 async function CandidaciesSection({ personId }: { personId: number }) {
   const candidacies = getPersonCandidacies(personId);
   if (candidacies.length === 0) return null;
-  // Each candidacy's own campaign CNPJ lives inline on its card — no reason
-  // for it to be a separate section down the page when a candidacy and its
-  // campaign committee are basically the same thing, one per election year.
   const campaignOrgs = getPersonCampaignOrgs(personId);
   const cnpjByYear = new Map(campaignOrgs.map((o) => [o.year, o.cnpj]));
 
@@ -386,9 +374,6 @@ async function FinanceSection({
   personId, year,
 }: { personId: number; year: number | undefined }) {
   const finance = year != null ? getPersonFinance(personId, year) : getPersonFinance(personId);
-  // No KPI summary here — those same numbers (recebido/despesas/pago) are
-  // already up top in the immutable overview; repeating them mid-page added
-  // nothing. This is just the itemized tables the overview doesn't show.
   return (
     <div id="financas" data-toc-title="finanças">
       {finance.donationsCount > 0 ? (
@@ -477,13 +462,6 @@ function Section({
   );
 }
 
-// ---------------------------------------------------------------------
-// Skeleton fallbacks — shown the instant the page shell paints, while each
-// section's own query is still in flight; replaced in place as each
-// resolves (see the matching Suspense boundaries above). Same id +
-// data-toc-title as the real section, so the índice picks it up right away
-// and the anchor keeps working across the swap.
-// ---------------------------------------------------------------------
 
 function SectionSkeleton({ id, title, rows = 3 }: { id?: string; title: string; rows?: number }) {
   return (

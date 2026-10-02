@@ -1,5 +1,4 @@
-"""social_review: the DeepSeek call is mocked; we check post selection,
-prompt building, the row written, and only_matched / --refresh behaviour."""
+"""social_review: the DeepSeek call is mocked; we check post selection,"""
 
 from __future__ import annotations
 
@@ -57,7 +56,7 @@ def test_only_matched_skips_clean_post(tmp_path, monkeypatch):
     _seed(con)
     monkeypatch.setattr(social_review, "chat_json", _fake_chat(True, ["desumanizacao"], "high"))
     rep = social_review.run(con, limit=50)
-    assert rep["reviewed"] == 2  # the '[]' post is skipped by only_matched
+    assert rep["reviewed"] == 2
     ids = {r["external_id"] for r in con.execute(
         "SELECT p.external_id FROM social_post_review r JOIN social_post p ON p.id = r.social_post_id"
     )}
@@ -81,10 +80,8 @@ def test_writes_review_row_and_is_incremental(tmp_path, monkeypatch):
     assert json.loads(row["categories"]) == ["desumanizacao"]
     assert row["quote"] == "verme"
 
-    # re-run: nothing new to review
     rep2 = social_review.run(con, limit=50)
     assert rep2["reviewed"] == 0
-    # --refresh re-reviews
     rep3 = social_review.run(con, limit=50, refresh=True)
     assert rep3["reviewed"] == 2
 

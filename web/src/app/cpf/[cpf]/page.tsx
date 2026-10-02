@@ -10,7 +10,6 @@ export default async function CpfPage({ params, searchParams }: PageProps<"/cpf/
   const digits = digitsOnly(cpf);
   if (digits.length !== 11) notFound();
 
-  // A candidate's CPF IS the candidate -- one profile per person ("juntar os 3").
   const personId = candidatePersonId(digits);
   if (personId !== null) redirect(`/politico/${personId}`);
 

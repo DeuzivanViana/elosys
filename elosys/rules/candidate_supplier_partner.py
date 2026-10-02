@@ -1,30 +1,4 @@
-"""Derived cross-reference: a CANDIDATE who is in the QUADRO SOCIETÁRIO of a
-company that RECEIVED campaign money.
-
-The Receita/BrasilAPI source masks the partner's CPF ("***498538**" -- only
-the 6 middle digits show), so this can never be a deterministic identity
-match (see ADs/identidade.md). It pairs:
-
-  normalize(company_partner.partner_name) == people.canonical_name
-  AND the 6 visible middle digits == the candidate's real cpf[3:9]
-
-Even then two people could share a name and those 6 digits by chance, so a
-row here is a "possível", not asserted identity: it never touches `people`
-or `signal_actor`, it lives in its own table (`candidate_supplier_partner`)
-with `match_basis` so the UI can flag it, and ambiguous matches (2+ people
-fitting name + 6 digits) are dropped entirely.
-
-What it surfaces: `paid_by_self = 1` means the candidate's OWN campaign paid
-a company they're a partner in. `payer_candidacies > 1` (or a payer that
-isn't them) means OTHER campaigns paid a politician-owned company. Either is
-worth a human look -- indício, não prova.
-
-Rewrite-only: run() wipes the table and rebuilds it from company_partner +
-campaign_expense. Needs `receita-cnpj` to have populated some quadro
-societário first (`company_partner`).
-
-Run: `elosys candidate-supplier-partner --db elosys.db`.
-"""
+"""Derived cross-reference: a CANDIDATE who is in the QUADRO SOCIETÁRIO of a"""
 
 from __future__ import annotations
 
@@ -36,7 +10,7 @@ from ..util import normalize_name, now_utc
 log = get_logger("elosys.rules.candidate_supplier_partner")
 
 MATCH_BASIS = "nome_e_6_digitos"
-MIN_NAME_LEN = 8  # a short "J SILVA" collides with too many people
+MIN_NAME_LEN = 8
 
 
 def run(con: sqlite3.Connection) -> dict:

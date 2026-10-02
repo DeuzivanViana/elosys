@@ -1,5 +1,4 @@
-"""TSE prestação de contas crawler (campaign_org + campaign_donation +
-campaign_expense + campaign_expense_payment) against a synthetic zip."""
+"""TSE prestação de contas crawler (campaign_org + campaign_donation +"""
 
 from __future__ import annotations
 
@@ -12,16 +11,16 @@ import pytest
 from elosys.db import connect, create_schema
 from elosys.tse import accounts
 
-_CPF = "11144477735"   # valid check digits, the recipient candidate
+_CPF = "11144477735"
 _CNPJ = "40430149000110"
 _SQ = "250000900001"
 
-_DONOR_CPF = "12345678909"       # a plain citizen, not in `people`
-_DONOR_CNPJ = "98765432000155"   # a company donor
-_OTHER_CANDIDATE_SQ = "250000900099"  # another candidate: donates AND gets paid
+_DONOR_CPF = "12345678909"
+_DONOR_CNPJ = "98765432000155"
+_OTHER_CANDIDATE_SQ = "250000900099"
 
-_SUPPLIER_CPF = "45612378900"        # a plain citizen supplier
-_SUPPLIER_CNPJ = "11222333000181"    # a company supplier
+_SUPPLIER_CPF = "45612378900"
+_SUPPLIER_CNPJ = "11222333000181"
 
 DON_HEADER = (
     "AA_ELEICAO;SG_UF;SQ_PRESTADOR_CONTAS;NR_CNPJ_PRESTADOR_CONTA;DS_CARGO;"
@@ -65,7 +64,7 @@ DON_LINES = [
     _receita("1", "1000,00", _DONOR_CPF, "FULANO CIDADAO"),
     _receita("2", "250,50", _DONOR_CNPJ, "EMPRESA X LTDA", cnae="6201-5/01"),
     _receita("3", "500,00", "10000000000", "OUTRO CANDIDATO", doador_candidato=_OTHER_CANDIDATE_SQ),
-    _receita("1", "1000,00", _DONOR_CPF, "FULANO CIDADAO"),  # exact dup SQ_RECEITA -> ignored
+    _receita("1", "1000,00", _DONOR_CPF, "FULANO CIDADAO"),
 ]
 
 EXP_LINES = [
@@ -75,7 +74,7 @@ EXP_LINES = [
     _despesa("103", "150,00", "10000000000", "OUTRO CANDIDATO", "PESSOA FISICA",
              fornecedor_candidato=_OTHER_CANDIDATE_SQ),
     _despesa("101", "800,00", _SUPPLIER_CNPJ, "AGENCIA DE MARKETING LTDA", "PESSOA JURIDICA",
-             cnae="7311-4/00"),  # exact dup SQ_DESPESA -> ignored
+             cnae="7311-4/00"),
 ]
 
 PAY_HEADER = (
@@ -93,10 +92,10 @@ def _pagamento(sq_despesa, sq_parcela, valor, data="20/09/2022"):
 
 
 PAY_LINES = [
-    _pagamento("101", "9001", "500,00"),  # 1st installment of expense 101
-    _pagamento("101", "9002", "300,00"),  # 2nd installment of expense 101 (fully paid: 800)
-    _pagamento("102", "9003", "300,00"),  # expense 102, fully paid
-    _pagamento("101", "9001", "500,00"),  # exact dup (year, SQ_DESPESA, parcela) -> ignored
+    _pagamento("101", "9001", "500,00"),
+    _pagamento("101", "9002", "300,00"),
+    _pagamento("102", "9003", "300,00"),
+    _pagamento("101", "9001", "500,00"),
 ]
 
 
@@ -126,7 +125,6 @@ def db(tmp_path, monkeypatch):
 
 
 def _seed_other_candidate(con) -> int:
-    """A second politician_history row: donates AND gets paid, in the tests below."""
     t = "2026-01-01T00:00:00Z"
     con.execute("INSERT INTO people (cpf, cpf_trusted, voter_id, canonical_name, created_at) "
                 "VALUES ('10000000000', 1, '900000000002', 'OUTRO CANDIDATO', ?)", (t,))
@@ -151,9 +149,9 @@ def test_campaign_org_and_donations_created_and_deduped(db, tmp_path):
     rep = accounts.run(con, years=[2022], tmp_dir=tmp_path)
 
     assert rep["orgs"] == 1
-    assert rep["donations"] == 3  # 4 rows, 1 exact-duplicate SQ_RECEITA ignored
+    assert rep["donations"] == 3
     assert rep["donations_linked_to_org"] == 3
-    assert rep["total_donations_cents"] == 175050  # 1000 + 250.50 + 500
+    assert rep["total_donations_cents"] == 175050
 
     org = con.execute("SELECT id FROM campaign_org").fetchone()
     dons = con.execute(
@@ -163,7 +161,7 @@ def test_campaign_org_and_donations_created_and_deduped(db, tmp_path):
 
     citizen, company, candidate = dons
     assert citizen["donor_cpf_cnpj"] == _DONOR_CPF
-    assert citizen["donor_person_id"] is None  # never linked: private citizen
+    assert citizen["donor_person_id"] is None
     assert citizen["donor_company_id"] is None
     assert citizen["amount_cents"] == 100000
 
@@ -176,9 +174,8 @@ def test_campaign_org_and_donations_created_and_deduped(db, tmp_path):
     assert donor_company["cnpj"] == _DONOR_CNPJ and donor_company["kind"] == "donor"
 
     assert candidate["donor_tse_candidacy_id"] == _OTHER_CANDIDATE_SQ
-    assert candidate["donor_person_id"] is not None  # linked: donor is a known politician
+    assert candidate["donor_person_id"] is not None
 
-    # provenance: campaign_donation -> parse -> collection -> source
     src = con.execute(
         "SELECT s.name FROM campaign_donation d JOIN parse p ON p.id = d.provenance_id "
         "JOIN collection c ON c.id = p.collection_id JOIN source s ON s.id = c.source_id LIMIT 1"
@@ -192,9 +189,9 @@ def test_campaign_expenses_created_and_deduped(db, tmp_path):
     _seed_other_candidate(con)
     rep = accounts.run(con, years=[2022], tmp_dir=tmp_path)
 
-    assert rep["expenses"] == 3  # 4 rows, 1 exact-duplicate SQ_DESPESA ignored
+    assert rep["expenses"] == 3
     assert rep["expenses_linked_to_org"] == 3
-    assert rep["total_expenses_cents"] == 125000  # 800 + 300 + 150
+    assert rep["total_expenses_cents"] == 125000
 
     org = con.execute("SELECT id FROM campaign_org").fetchone()
     exps = con.execute(
@@ -212,11 +209,11 @@ def test_campaign_expenses_created_and_deduped(db, tmp_path):
     assert supplier_company["cnpj"] == _SUPPLIER_CNPJ and supplier_company["kind"] == "supplier"
 
     assert citizen["supplier_cpf_cnpj"] == _SUPPLIER_CPF
-    assert citizen["supplier_person_id"] is None  # never linked: private citizen
+    assert citizen["supplier_person_id"] is None
     assert citizen["supplier_company_id"] is None
 
     assert candidate["supplier_tse_candidacy_id"] == _OTHER_CANDIDATE_SQ
-    assert candidate["supplier_person_id"] is not None  # linked: supplier is a known politician
+    assert candidate["supplier_person_id"] is not None
 
     src = con.execute(
         "SELECT s.name FROM campaign_expense e JOIN parse p ON p.id = e.provenance_id "
@@ -230,9 +227,9 @@ def test_expense_payments_created_deduped_and_linked(db, tmp_path):
     con = connect(db, write=True)
     rep = accounts.run(con, years=[2022], tmp_dir=tmp_path)
 
-    assert rep["payments"] == 3  # 4 rows, 1 exact-duplicate (year, despesa, parcela) ignored
+    assert rep["payments"] == 3
     assert rep["payments_linked_to_expense"] == 3
-    assert rep["total_payments_cents"] == 110000  # 500 + 300 + 300
+    assert rep["total_payments_cents"] == 110000
 
     expense_101 = con.execute(
         "SELECT id FROM campaign_expense WHERE tse_expense_id = '101'"
@@ -246,7 +243,6 @@ def test_expense_payments_created_deduped_and_linked(db, tmp_path):
         {"tse_installment_id": "9002", "amount_cents": 30000, "campaign_expense_id": expense_101["id"]},
     ]
 
-    # provenance: campaign_expense_payment -> parse -> collection -> source
     src = con.execute(
         "SELECT s.name FROM campaign_expense_payment p JOIN parse pa ON pa.id = p.provenance_id "
         "JOIN collection c ON c.id = pa.collection_id JOIN source s ON s.id = c.source_id LIMIT 1"
@@ -260,8 +256,6 @@ def test_never_creates_a_people_row_for_a_plain_donor_or_supplier(db, tmp_path):
     before = con.execute("SELECT count(*) FROM people").fetchone()[0]
     accounts.run(con, years=[2022], tmp_dir=tmp_path)
     after = con.execute("SELECT count(*) FROM people").fetchone()[0]
-    # +1 only for the recipient candidate (JOAO DA SILVA); the citizen/company
-    # donors and suppliers must not create people rows.
     assert after == before + 1
     con.close()
 
@@ -278,6 +272,5 @@ def test_rerun_is_idempotent(db, tmp_path):
     assert con.execute("SELECT count(*) FROM campaign_donation").fetchone()[0] == 3
     assert con.execute("SELECT count(*) FROM campaign_expense").fetchone()[0] == 3
     assert con.execute("SELECT count(*) FROM campaign_expense_payment").fetchone()[0] == 3
-    # companies: campaign + donor (CNPJ) + supplier (CNPJ)
     assert con.execute("SELECT count(*) FROM companies").fetchone()[0] == 3
     con.close()

@@ -51,11 +51,7 @@ export default async function RankingPage({ searchParams }: PageProps<"/ranking"
       />
 
       <section>
-        <div className="mono-label">
-          elosys/lib/queries.ts · {tipo === "bens" ? "getAssetsRanking" : "getAssetsGrowthRanking"} · agregação
-          direta, sem regra
-        </div>
-        <h1 className="mt-3 text-[26px] leading-tight font-medium tracking-tight">
+        <h1 className="text-[26px] leading-tight font-medium tracking-tight">
           Ranking de candidatos — {tipo === "bens" ? "bens declarados" : "maior crescimento patrimonial"}
         </h1>
         {tipo === "bens" ? (

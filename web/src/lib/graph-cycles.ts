@@ -1,9 +1,3 @@
-/**
- * Which edges of a directed graph sit on a cycle (a "doação circular" path:
- * A -> B -> ... -> A). Uses Tarjan's strongly-connected-components algorithm:
- * an edge is on some cycle iff both endpoints are in the same SCC and that
- * SCC has more than one node. O(V+E), no need to enumerate every cycle.
- */
 
 export type CycleEdge = { source: string; target: string };
 
@@ -26,7 +20,6 @@ export function findCircularEdgeKeys(
   const sccSize = new Map<number, number>();
   let sccCount = 0;
 
-  // Iterative Tarjan (avoids recursion depth issues on long chains).
   for (const start of adj.keys()) {
     if (indices.has(start)) continue;
     const workStack: Array<{ v: string; i: number }> = [{ v: start, i: 0 }];

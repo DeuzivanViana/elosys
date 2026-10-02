@@ -1,13 +1,4 @@
-"""Thin DeepSeek chat client (OpenAI-compatible API).
-
-Used by elosys/rules/ai_review.py to get a cheap second opinion on detection
-signals. The API key is read from the DEEPSEEK_API_KEY environment variable
-ONLY -- never a config file, never committed. Get one at
-https://platform.deepseek.com/ and:
-
-    export DEEPSEEK_API_KEY=sk-...        # bash/zsh
-    $env:DEEPSEEK_API_KEY = "sk-..."      # PowerShell
-"""
+"""Thin DeepSeek chat client (OpenAI-compatible API)."""
 
 from __future__ import annotations
 
@@ -36,9 +27,6 @@ def chat_json(
     temperature: float = 0.2,
     timeout: int = 120,
 ) -> dict:
-    """One chat completion, forced to return a JSON object. Returns
-    {"data": <parsed dict>, "raw": <raw content str>, "prompt_tokens": int,
-    "completion_tokens": int}. Raises DeepSeekError on HTTP/parse failure."""
     key = os.environ.get("DEEPSEEK_API_KEY")
     if not key:
         raise DeepSeekError(
@@ -61,7 +49,7 @@ def chat_json(
             },
             timeout=timeout,
         )
-    except Exception as e:  # noqa: BLE001 -- curl_cffi raises a few different things
+    except Exception as e:  # noqa: BLE001
         raise DeepSeekError(f"falha de rede: {e}") from e
 
     if r.status_code != 200:

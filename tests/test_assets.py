@@ -26,7 +26,7 @@ def _bem(sq, ordem, tipo, desc, valor):
 LINES = [
     _bem(_SQ, "1", "Apartamento", "Apartamento na cidade de Sao Paulo", "750000,00"),
     _bem(_SQ, "2", "Veiculo automotor", "Carro popular", "35000,00"),
-    _bem("999999999999", "1", "Dinheiro em especie", "Reserva", "1000,00"),  # unlinked candidacy
+    _bem("999999999999", "1", "Dinheiro em especie", "Reserva", "1000,00"),
 ]
 
 
@@ -78,7 +78,7 @@ def test_assets_created_and_linked(db, tmp_path):
     assert rep["assets"] == 3
     assert rep["candidacies"] == 2
     assert rep["linked_to_person"] == 2
-    assert rep["total_value_cents"] == 78600000  # 750000+35000+1000 = 786000,00
+    assert rep["total_value_cents"] == 78600000
 
     linked = con.execute(
         "SELECT asset_type, value_cents, person_id, history_id FROM declared_assets "

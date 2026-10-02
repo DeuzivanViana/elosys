@@ -1,17 +1,4 @@
-"""Identity resolution (see ADs/identidade.md).
-
-Deterministic matching. Called from the promote step, after ambiguous CPFs have
-already been nulled (see `elosys.tse.candidates.promote`), so a CPF that reaches
-here is assumed to be in a 1:1 relationship with a person.
-
-Match order:
-    1. voter_id (título eleitoral) already on a person -> that person
-    2. else valid CPF already on a person              -> that person
-    3. else                                             -> new person
-A freshly seen CPF / voter_id is written onto a person that did not have one yet.
-Fine-grained reconciliation (homonyms, manual merge/split, 2024 CPF backfill) is
-a later job — see ADs/identidade.md.
-"""
+"""Identity resolution (see ADs/identidade.md)."""
 
 from __future__ import annotations
 
@@ -22,7 +9,6 @@ from .util import cpf_is_valid, digits_only, now_utc
 
 def resolve_person(con: sqlite3.Connection, *, cpf: str | None,
                    voter_id: str | None, normalized_name: str | None) -> tuple[int, bool]:
-    """Returns (person_id, cpf_trusted_for_this_row)."""
     cpf_d = digits_only(cpf)
     voter_d = digits_only(voter_id)
     cpf_ok = cpf_is_valid(cpf_d)

@@ -21,8 +21,6 @@ export function AppShell({ counts, children }: { counts: SidebarCounts; children
   );
 }
 
-// /grafo owns its own full-height canvas layout — it doesn't want the
-// padded/max-width content wrapper the rest of the app uses.
 function ContentBody({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   if (pathname?.startsWith("/grafo")) {

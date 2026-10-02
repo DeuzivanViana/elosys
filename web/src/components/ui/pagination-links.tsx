@@ -2,10 +2,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { pageList } from "./pagination-shared";
 
-/** Same look as <Pagination>, but for server-rendered pages that page via
- * URL (`?page=N`) instead of client state — links, not buttons. No "use
- * client" here: it's rendered straight from Server Component pages, and a
- * function prop like `makeHref` can't cross into a Client Component. */
+/** No "use client": function props like makeHref can't cross into a Client Component. */
 export function PaginationLinks({
   page, totalPages, makeHref,
 }: { page: number; totalPages: number; makeHref: (page: number) => string }) {
