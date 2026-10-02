@@ -83,6 +83,21 @@ Build de produção: `npm run build && npm run start`.
 
 ---
 
+### 2.1. Executar usando Podeman (Dockerfile)
+Baixe o banco de dados e crie uma pasta em `/web`:
+```sh
+mkdir web/db && cd web
+```
+Mova o arquivo já descompactado `elosys.db` para `web/db/`. Então construa a container com:
+```bash
+podman build -t elosys .
+```
+
+Execute o container com seguinte comando:
+```bash
+podman run --rm -p 0.0.0.0:3000:3000 -v "$PWD:/app:Z" elosys
+```
+
 ## Criar o banco do zero e popular
 
 Reconstrói tudo a partir das fontes oficiais. **Demora**: os arquivos do TSE são
