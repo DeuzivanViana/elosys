@@ -88,7 +88,7 @@ Baixe o banco de dados e crie uma pasta em `/web`:
 ```sh
 mkdir web/db && cd web
 ```
-Mova o arquivo já descompactado `elosys.db` para `web/db/`. Então construa a container com:
+Mova o arquivo já descompactado `elosys.db` para `web/db/`. Então construa o container com:
 ```bash
 podman build -t elosys .
 ```
@@ -96,6 +96,8 @@ podman build -t elosys .
 Execute o container com seguinte comando:
 ```bash
 podman run --rm -p 0.0.0.0:3000:3000 -v "$PWD:/app:Z" elosys
+
+# acesse localhost:3000
 ```
 
 ## Criar o banco do zero e popular
